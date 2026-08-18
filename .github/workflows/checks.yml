@@ -1,0 +1,46 @@
+name: checks
+
+on:
+  pull_request:
+
+jobs:
+  what-bled:
+    runs-on: ubuntu-latest
+    steps:
+      - name: PR body names its bleed
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python3 - <<'EOF'
+          import os, re, sys
+          body = os.environ.get("BODY") or ""
+          m = re.search(r"## What bled\s*\n(.*?)(?=\n## |\Z)", body, re.S)
+          section = m.group(1) if m else ""
+          section = re.sub(r"<!--.*?-->", "", section, flags=re.S).strip()
+          if len(section) < 20:
+              sys.exit("The 'What bled' section must name the real-work incident "
+                       "(or decision record / grant) motivating this change.")
+          print("What bled:", section[:160])
+          EOF
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run tests when any exist
+        run: |
+          if ls tests/test_*.py >/dev/null 2>&1; then
+            python3 -m unittest discover -s tests -v
+          else
+            echo "No tests in this repo yet — nothing to run."
+          fi

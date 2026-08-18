@@ -1,0 +1,39 @@
+# {{PROJECT}}
+
+{{ONE_LINE_WHAT_AND_WHY}}
+
+Charter: [docs/charter.md](docs/charter.md) — read it first; it declares this
+project's **stakes tier** ({{throwaway | standard | production}}), which sets
+review depth everywhere below. Process origin: smansf/sofa-claude (copied at
+bootstrap {{DATE}}; this repo owes it nothing).
+
+## Branches and deploys
+
+- `dev` — Claude's trunk. Feature branches `claude/*` PR into `dev`; Claude
+  merges at will once CI is green and the reviewer pass (grants.md Grant 2)
+  is done. Open every PR at the first push, draft if unready.
+- `staging` — human-facing preview. Steve promotes `dev → staging` via a
+  promotion PR that Claude prepares with a plain summary. {{VERCEL_PREVIEW}}
+- `main` — production. Steve promotes `staging → main`. {{VERCEL_PROD}}
+- Deploy wiring lives in Steve's Vercel account; Claude holds no Vercel
+  credentials. Claude never merges to `staging` or `main`.
+- Promote often: a `dev` far ahead of `staging` makes promotion scary
+  instead of routine. Claude flags when the gap exceeds ~10 units.
+
+## Units of work
+
+- One issue per unit; acceptance criteria frozen on the issue before code.
+  Done = merged to `dev`. No unit reopens; follow-ups are new intake.
+- TDD: failing test first, then code. CI enforces the coverage floor of
+  {{COVERAGE_FLOOR}}% — a floor to hold, never a number to climb.
+- Mid-unit discoveries: fix now if inside the frozen AC; file only if
+  severity:P1/P2 or it invalidates the unit's premise; otherwise drop
+  silently. P3 issues auto-expire after 14 days untouched.
+- Review: one round per unit, scaled to the charter's stakes tier; a second
+  round only for P1/P2 findings.
+
+## Never
+
+- Merge to `staging` or `main` — those are Steve's promotions, always.
+- Add process machinery here. Process problems are sofa-claude bleeds:
+  note the incident, raise it there, keep building the product.

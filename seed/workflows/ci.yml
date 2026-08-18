@@ -1,0 +1,33 @@
+# Seed CI for a workload repo. Bootstrap adapts the stack-specific parts
+# ({{...}} placeholders) to the project's actual language and tooling.
+name: ci
+
+on:
+  push:
+    branches: [dev, staging, main, "claude/**"]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint
+        run: "{{LINT_COMMAND}}"
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tests with coverage floor
+        run: "{{TEST_COMMAND_WITH_COVERAGE_FLOOR}}"
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
