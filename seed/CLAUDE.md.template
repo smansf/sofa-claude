@@ -12,7 +12,8 @@ bootstrap {{DATE}}; this repo owes it nothing).
 - `dev` — Claude's trunk. Feature branches `claude/*` PR into `dev`; Claude
   merges at will once CI is green and a fresh-context reviewer pass — one
   round, scaled to the charter's stakes tier — is posted as a comment on
-  the PR (no comment, no merge). Open every PR at the first push, draft
+  the PR (no comment, no merge). `dev` is the repo's default branch, so
+  unit issues auto-close on merge. Open every PR at the first push, draft
   while review and fixes are in progress; ready means merging is the only
   step left.
 - `staging` — human-facing preview. Steve promotes `dev → staging` via a
@@ -36,7 +37,10 @@ bootstrap {{DATE}}; this repo owes it nothing).
 - Second triage, on the issue: `urgent` (interrupts current work), `keep`
   (never expires), or unlabeled (default — auto-expires after 14 days
   untouched). Tier, and whether it needs a spec, is judged at pickup.
-- Review: the `dev` rule above. Promotion PRs hand Steve the paste-ready
+- Review: the `dev` rule above. Amendments to `docs/charter.md` or
+  `docs/design.md` additionally take a `doc-review` pass (operator
+  toolbox); at production stakes Steve re-approves via PR review.
+  Promotion PRs hand Steve the paste-ready
   `/code-review <effort> <PR URL> --comment` command and confirm its
   findings actually landed on the PR.
 

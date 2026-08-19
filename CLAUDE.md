@@ -5,9 +5,8 @@ workload repos copy at bootstrap, the governance record, a small closed set of
 skills, and the "needs Steve" digest. Work happens in workload repos, never
 here. Account rules inherit from `~/.claude/CLAUDE.md`.
 
-Origin: rebuilt 2026-08 from `smansf/sofa-claude-legacy`, which spiraled into
-process-about-process. Diagnosis: [decisions/0001](decisions/0001-rebuild-from-legacy.md);
-intake and review design: [decisions/0002](decisions/0002-discovered-work-and-review-lines.md).
+Origin: rebuilt 2026-08 from `smansf/sofa-claude-legacy`, which spiraled
+into process-about-process. All rationale lives in `decisions/` (start at 0001).
 
 ## What this repo is not
 
@@ -21,8 +20,9 @@ back; good patterns are harvested back here occasionally, never pushed out.
   first push and keep it draft while review and fixes are in progress —
   ready means merging is the only step left. A pushed branch with no PR is
   a defect.
-- Every PR body fills **What bled**: the concrete incident in real work that
-  motivated the change. CI rejects an unfilled section. No bleed, no merge.
+- Every PR body fills **Why this change** with the concrete incident in
+  real work that motivated it. CI rejects an unfilled section. No bleed,
+  no merge.
 - Healthy steady state: near-zero PRs here while workload repos grow. This
   queue is the spiral detector — if it fills, the factory is manufacturing
   factory parts again.
@@ -46,19 +46,21 @@ back; good patterns are harvested back here occasionally, never pushed out.
 
 ## Review
 
-Depth scales with product stakes, never diff contents. One round per unit; a
-second round only for `urgent`/`keep`-grade findings — the rest follow the
-intake rule. Design/governance prose gets the adversarial brief review, its
+Depth scales with product stakes, never diff contents. One round per unit;
+a second only when an urgent-grade finding survives the fix round — all
+else follows the intake rule. Design/governance prose gets the adversarial brief review, its
 brief visible in the PR before it runs. Code review is Steve's to type —
 the process hands him the exact `/code-review <effort> <PR URL> --comment`
 command in the PR body or digest; Claude never invokes or replicates it.
 
 ## Skills
 
-The set is closed: `onboard`, `wrap-up`, `bootstrap`. Adding one takes a
-bleed, like any rule. `/onboard` first in every session (reads Issue #1's
-body only); `/wrap-up` before ending a substantive session (refreshes
-Issues #1 and #2).
+The set is closed: `onboard`, `wrap-up`, `bootstrap`, `doc-review` —
+adding one takes a bleed. Skills are the operator's toolbox, not repo
+content: installed to `~/.claude/skills/` as copies from merged `main`
+only (never a branch), and may never require a convention a bootstrapped
+repo lacks. `/onboard` first in every session (reads Issue #1's body
+only); `/wrap-up` before ending one (refreshes Issues #1 and #2).
 
 ## Rulebook budget
 
