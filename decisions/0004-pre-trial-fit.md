@@ -47,7 +47,17 @@ which wasn't `dev`.
 
 ## Consequences
 
-Bootstrap can now run its own trial (skills available account-wide);
-wilson gets a designed foundation without re-importing ceremony into
+Bootstrap can run its own trial once the post-merge install lands —
+onboard's freshness check then keeps the toolbox current every session.
+Wilson gets a designed foundation without re-importing ceremony into
 throwaway work; PR bodies read plainly to future miners; unit hygiene is
-automatic. doc-review's first invocation is the PR that created it.
+automatic. doc-review's first invocation was this PR itself; its review
+drove this record's own amendments (see the PR's findings comment).
+
+Accepted residual risks, revisited only if they bleed: at standard
+stakes the design-record review is self-administered (author fills the
+brief; the brief-content rule and the production-stakes PR-review
+artifact bound but don't eliminate steering); and sessions working
+inside sofa-claude itself load the checkout's repo-scoped skills — that
+is the development loop, while the account copies govern everywhere
+else.

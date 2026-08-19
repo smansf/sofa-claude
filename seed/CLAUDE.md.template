@@ -37,7 +37,10 @@ bootstrap {{DATE}}; this repo owes it nothing).
 - Second triage, on the issue: `urgent` (interrupts current work), `keep`
   (never expires), or unlabeled (default — auto-expires after 14 days
   untouched). Tier, and whether it needs a spec, is judged at pickup.
-- Review: the `dev` rule above. Promotion PRs hand Steve the paste-ready
+- Review: the `dev` rule above. Amendments to `docs/charter.md` or
+  `docs/design.md` additionally take a `doc-review` pass (operator
+  toolbox); at production stakes Steve re-approves via PR review.
+  Promotion PRs hand Steve the paste-ready
   `/code-review <effort> <PR URL> --comment` command and confirm its
   findings actually landed on the PR.
 

@@ -46,9 +46,9 @@ back; good patterns are harvested back here occasionally, never pushed out.
 
 ## Review
 
-Depth scales with product stakes, never diff contents. One round per unit; a
-second round only for `urgent`/`keep`-grade findings — the rest follow the
-intake rule. Design/governance prose gets the adversarial brief review, its
+Depth scales with product stakes, never diff contents. One round per unit;
+a second only when an urgent-grade finding survives the fix round — all
+else follows the intake rule. Design/governance prose gets the adversarial brief review, its
 brief visible in the PR before it runs. Code review is Steve's to type —
 the process hands him the exact `/code-review <effort> <PR URL> --comment`
 command in the PR body or digest; Claude never invokes or replicates it.

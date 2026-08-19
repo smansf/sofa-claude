@@ -13,6 +13,10 @@ description: Start-of-session orientation — one cheap read of the standing han
 3. State your understanding of current scope in two or three sentences and
    confirm it with Steve (or, in an unattended run, against the schedule's
    declared purpose). Only then read anything else or act.
+4. Freshness check on the operator toolbox: if `~/.claude/skills/` differs
+   from sofa-claude `main`'s `.claude/skills/` (compare via `gh`), refresh
+   the copies from merged `main` — never from a branch — before relying on
+   any skill.
 
 Do not deep-read decision records, grants, or history reflexively — pull
 them in only when the confirmed scope needs them.

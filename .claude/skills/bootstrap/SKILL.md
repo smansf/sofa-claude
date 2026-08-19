@@ -16,10 +16,12 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
 2. **Design record — scaled by the stakes tier.** Throwaway: skip
    entirely; the charter is enough. Standard and production: one page
    (`docs/design.md`) — stack choice and why, architecture sketch, data
-   shape, main structural risks — reviewed with `doc-review`; at
-   production stakes, Steve approves it explicitly before any unit opens.
-   Decisions, not documents: a section with nothing load-bearing to say
-   gets deleted, not filled.
+   shape, main structural risks — reviewed with `doc-review`. At
+   production stakes, Steve's approving GitHub review **on the bootstrap
+   PR itself** is the approval artifact — Claude merges that PR only
+   after it exists; chat assent is not approval. Decisions, not
+   documents: a section with nothing load-bearing to say gets deleted,
+   not filled.
 3. **Copy the seed**: `seed/CLAUDE.md.template` → `CLAUDE.md`,
    `seed/workflows/ci.yml` → `.github/workflows/ci.yml`,
    `seed/workflows/backlog-expiry.yml` → `.github/workflows/backlog-expiry.yml`,
@@ -27,9 +29,12 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    Fill every `{{PLACEHOLDER}}` from the charter and design record. The
    copy is a divorce: this repo owes sofa-claude nothing after.
 4. **Wire the repo**: create `dev` and `staging` from `main`; **set `dev`
-   as the default branch** — unit issues then auto-close when their PR
-   merges to `dev` (closing keywords fire only on the default branch),
-   and new PRs target `dev` by default. Create labels `urgent`, `keep`,
+   as the default branch, then verify it stuck** (`gh repo view --json
+   defaultBranchRef` must say `dev` — if it doesn't, stop wiring and put
+   it in the needs-Steve digest, because unit auto-close and the expiry
+   record both silently lie until it's fixed). Unit issues then auto-close
+   when their PR merges to `dev`, and new PRs target `dev` by default.
+   Create labels `urgent`, `keep`,
    `standing`; create the standing handoff issue and note its number in
    CLAUDE.md. Vercel wiring is Steve's step — list it in the needs-Steve
    digest, don't wait.
