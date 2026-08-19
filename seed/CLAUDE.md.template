@@ -1,0 +1,47 @@
+# {{PROJECT}}
+
+{{ONE_LINE_WHAT_AND_WHY}}
+
+Charter: [docs/charter.md](docs/charter.md) — read it first; it declares this
+project's **stakes tier** ({{throwaway | standard | production}}), which sets
+review depth everywhere below. Process origin: smansf/sofa-claude (copied at
+bootstrap {{DATE}}; this repo owes it nothing).
+
+## Branches and deploys
+
+- `dev` — Claude's trunk. Feature branches `claude/*` PR into `dev`; Claude
+  merges at will once CI is green and a fresh-context reviewer pass — one
+  round, scaled to the charter's stakes tier — is posted as a comment on
+  the PR (no comment, no merge). Open every PR at the first push, draft
+  while review and fixes are in progress; ready means merging is the only
+  step left.
+- `staging` — human-facing preview. Steve promotes `dev → staging` via a
+  promotion PR that Claude prepares with a plain summary. {{VERCEL_PREVIEW}}
+- `main` — production. Steve promotes `staging → main`. {{VERCEL_PROD}}
+- Deploy wiring lives in Steve's Vercel account; Claude holds no Vercel
+  credentials. Claude never merges to `staging` or `main`.
+- Promote often: a `dev` far ahead of `staging` makes promotion scary
+  instead of routine. Claude flags when the gap exceeds ~10 units.
+
+## Units of work
+
+- One issue per unit; acceptance criteria frozen on the issue before code.
+  Done = merged to `dev`. No unit reopens; follow-ups are new intake.
+- TDD: failing test first, then code. CI enforces the coverage floor of
+  {{COVERAGE_FLOOR}}% — a floor to hold, never a number to climb.
+- Discovered work, first triage: fix in flight only what blocks the unit or
+  is a trivial defect in code already being touched (capped at trivial —
+  wants design ⇒ file it). Everything else real is filed silently, at any
+  severity; observations with no statable harm scenario are not filed.
+- Second triage, on the issue: `urgent` (interrupts current work), `keep`
+  (never expires), or unlabeled (default — auto-expires after 14 days
+  untouched). Tier, and whether it needs a spec, is judged at pickup.
+- Review: the `dev` rule above. Promotion PRs hand Steve the paste-ready
+  `/code-review <effort> <PR URL> --comment` command and confirm its
+  findings actually landed on the PR.
+
+## Never
+
+- Merge to `staging` or `main` — those are Steve's promotions, always.
+- Add process machinery here. Process problems are sofa-claude bleeds:
+  note the incident, raise it there, keep building the product.
