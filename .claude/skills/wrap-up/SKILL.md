@@ -18,6 +18,8 @@ description: End-of-session handoff — drain in-flight work, reconcile issue st
    genuinely blocked on Steve — pending merges/promotions, open grant
    decisions, halted runs — each with its paste-ready command where one
    applies (e.g. `/code-review high <PR URL> --comment`). An empty list is
-   a valid and good state.
+   a valid and good state. End the digest with one line — the current count
+   of open `keep`-labeled issues across repos — a number, not a list, so
+   silent filing stays visible in aggregate.
 5. Give Steve a plain-English recap (what shipped, what's blocked, what's
    next) and a ready-to-paste prompt for the next session.

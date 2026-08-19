@@ -10,8 +10,11 @@ bootstrap {{DATE}}; this repo owes it nothing).
 ## Branches and deploys
 
 - `dev` — Claude's trunk. Feature branches `claude/*` PR into `dev`; Claude
-  merges at will once CI is green and the reviewer pass (grants.md Grant 2)
-  is done. Open every PR at the first push, draft if unready.
+  merges at will once CI is green and a fresh-context reviewer pass — one
+  round, scaled to the charter's stakes tier — is posted as a comment on
+  the PR (no comment, no merge). Open every PR at the first push, draft
+  while review and fixes are in progress; ready means merging is the only
+  step left.
 - `staging` — human-facing preview. Steve promotes `dev → staging` via a
   promotion PR that Claude prepares with a plain summary. {{VERCEL_PREVIEW}}
 - `main` — production. Steve promotes `staging → main`. {{VERCEL_PROD}}
@@ -33,9 +36,9 @@ bootstrap {{DATE}}; this repo owes it nothing).
 - Second triage, on the issue: `urgent` (interrupts current work), `keep`
   (never expires), or unlabeled (default — auto-expires after 14 days
   untouched). Tier, and whether it needs a spec, is judged at pickup.
-- Review: `dev` merges take green CI plus one fresh-context reviewer round,
-  scaled to the charter's stakes tier. Promotion PRs hand Steve the
-  paste-ready `/code-review <effort> <PR URL> --comment` command.
+- Review: the `dev` rule above. Promotion PRs hand Steve the paste-ready
+  `/code-review <effort> <PR URL> --comment` command and confirm its
+  findings actually landed on the PR.
 
 ## Never
 

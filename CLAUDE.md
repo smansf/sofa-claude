@@ -18,7 +18,9 @@ back; good patterns are harvested back here occasionally, never pushed out.
 ## Delivery
 
 - Branch `claude/*`, PR to `main`, Steve merges — always. Open the PR at the
-  first push, draft if unready; a pushed branch with no PR is a defect.
+  first push and keep it draft while review and fixes are in progress —
+  ready means merging is the only step left. A pushed branch with no PR is
+  a defect.
 - Every PR body fills **What bled**: the concrete incident in real work that
   motivated the change. CI rejects an unfilled section. No bleed, no merge.
 - Healthy steady state: near-zero PRs here while workload repos grow. This
@@ -61,9 +63,9 @@ Issues #1 and #2).
 ## Rulebook budget
 
 This file stays under 75 lines. Adding a rule means removing or merging one.
-Decision records (`decisions/`) are one page each, individually supersedable.
-Grants (`governance/`) take effect only by Steve merging the PR that adds or
-amends them.
+On conflict, this file is normative: decision records (`decisions/`, one
+page each) are dated rationale, never live rules. Grants (`governance/`)
+take effect only by Steve merging the PR that adds or amends them.
 
 ## Never
 

@@ -2,9 +2,12 @@
 # ({{...}} placeholders) to the project's actual language and tooling.
 name: ci
 
+# claude/* branches are deliberately absent from the push list: every one
+# has an open PR by rule, so the pull_request trigger already covers them —
+# listing them too would run everything twice per commit.
 on:
   push:
-    branches: [dev, staging, main, "claude/**"]
+    branches: [dev, staging, main]
   pull_request:
 
 jobs:

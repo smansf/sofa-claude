@@ -14,6 +14,7 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    like, written before work starts.
 2. **Copy the seed**: `seed/CLAUDE.md.template` → `CLAUDE.md`,
    `seed/workflows/ci.yml` → `.github/workflows/ci.yml`,
+   `seed/workflows/backlog-expiry.yml` → `.github/workflows/backlog-expiry.yml`,
    `seed/pull_request_template.md` → `.github/pull_request_template.md`.
    Fill every `{{PLACEHOLDER}}` from the charter and the project's actual
    stack. The copy is a divorce: this repo owes sofa-claude nothing after.
