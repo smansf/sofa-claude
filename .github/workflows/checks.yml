@@ -5,23 +5,23 @@ on:
     types: [opened, edited, synchronize, reopened]
 
 jobs:
-  what-bled:
+  why-this-change:
     runs-on: ubuntu-latest
     steps:
-      - name: PR body names its bleed
+      - name: PR body names the incident motivating it
         env:
           BODY: ${{ github.event.pull_request.body }}
         run: |
           python3 - <<'EOF'
           import os, re, sys
           body = os.environ.get("BODY") or ""
-          m = re.search(r"## What bled\s*\n(.*?)(?=\n## |\Z)", body, re.S)
-          section = m.group(1) if m else ""
-          section = re.sub(r"<!--.*?-->", "", section, flags=re.S).strip()
+          m = re.search(r"## Why this change\s*\n(.*?)(?=\n## |\Z)", body, re.S)
+          section = re.sub(r"<!--.*?-->", "", m.group(1) if m else "", flags=re.S).strip()
           if len(section) < 20:
-              sys.exit("The 'What bled' section must name the real-work incident "
-                       "(or decision record / grant) motivating this change.")
-          print("What bled:", section[:160])
+              sys.exit("The 'Why this change' section must name the concrete "
+                       "real-work incident (or decision record / grant) "
+                       "motivating this change.")
+          print("Why this change:", section[:160])
           EOF
 
   secrets:

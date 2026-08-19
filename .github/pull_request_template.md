@@ -1,11 +1,15 @@
-## What bled
+## Why this change
 
-<!-- The concrete incident in real work that motivated this change — which
-workload repo, what happened, why the current process failed it. Founding
-seed and governance PRs cite their decision record or grant instead.
-CI rejects this section when empty or under ~20 characters of substance. -->
+<!-- The concrete incident in real work that motivated this — which repo,
+what happened, why the current process failed it. Founding and governance
+PRs cite their decision record or grant instead. Abstract improvement is
+not a reason to merge; CI rejects this section when empty or near-empty. -->
 
 ## What changed
+
+<!-- The approach in a few sentences, plus anything surprising in the diff
+a reviewer would puzzle over. Link the issue this resolves with a closing
+keyword (e.g. "Closes #12"). -->
 
 ## Verification
 

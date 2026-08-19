@@ -21,8 +21,9 @@ back; good patterns are harvested back here occasionally, never pushed out.
   first push and keep it draft while review and fixes are in progress —
   ready means merging is the only step left. A pushed branch with no PR is
   a defect.
-- Every PR body fills **What bled**: the concrete incident in real work that
-  motivated the change. CI rejects an unfilled section. No bleed, no merge.
+- Every PR body fills **Why this change** with the concrete incident in
+  real work that motivated it. CI rejects an unfilled section. No bleed,
+  no merge.
 - Healthy steady state: near-zero PRs here while workload repos grow. This
   queue is the spiral detector — if it fills, the factory is manufacturing
   factory parts again.
@@ -55,10 +56,13 @@ command in the PR body or digest; Claude never invokes or replicates it.
 
 ## Skills
 
-The set is closed: `onboard`, `wrap-up`, `bootstrap`. Adding one takes a
-bleed, like any rule. `/onboard` first in every session (reads Issue #1's
-body only); `/wrap-up` before ending a substantive session (refreshes
-Issues #1 and #2).
+The set is closed: `onboard`, `wrap-up`, `bootstrap`, `doc-review`. Adding
+one takes a bleed, like any rule. Skills are the operator's toolbox, not
+repo content: installed to `~/.claude/skills/` as copies from merged
+`main` only — never symlinked, never from a branch — and a skill may
+never require a repo convention a bootstrapped repo lacks. `/onboard`
+first in every session (reads Issue #1's body only); `/wrap-up` before
+ending a substantive session (refreshes Issues #1 and #2).
 
 ## Rulebook budget
 

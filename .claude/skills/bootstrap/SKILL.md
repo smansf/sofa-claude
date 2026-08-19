@@ -1,6 +1,6 @@
 ---
 name: bootstrap
-description: Bootstrap a workload repo from the seed kit — elicit a one-page charter with a stakes tier and end condition, copy and adapt seed/, wire branches and standing issues.
+description: Bootstrap a workload repo from the seed kit — elicit a charter with stakes tier and falsifiable end condition, add a stakes-scaled design record, copy and adapt seed/, wire branches, labels, and standing issues.
 ---
 
 # bootstrap
@@ -10,23 +10,34 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
 1. **Charter first** (`docs/charter.md`, one page, elicited from Steve):
    what is being built and why; who uses it; the **stakes tier**
    (throwaway / standard / production) that sets review depth everywhere;
-   the coverage floor; and the project's **end condition** — what done looks
-   like, written before work starts.
-2. **Copy the seed**: `seed/CLAUDE.md.template` → `CLAUDE.md`,
+   the coverage floor; and the project's **end condition** — what done
+   looks like, written before work starts and *falsifiable*: if you can't
+   say how you'd test that it's met, rewrite it until you can.
+2. **Design record — scaled by the stakes tier.** Throwaway: skip
+   entirely; the charter is enough. Standard and production: one page
+   (`docs/design.md`) — stack choice and why, architecture sketch, data
+   shape, main structural risks — reviewed with `doc-review`; at
+   production stakes, Steve approves it explicitly before any unit opens.
+   Decisions, not documents: a section with nothing load-bearing to say
+   gets deleted, not filled.
+3. **Copy the seed**: `seed/CLAUDE.md.template` → `CLAUDE.md`,
    `seed/workflows/ci.yml` → `.github/workflows/ci.yml`,
    `seed/workflows/backlog-expiry.yml` → `.github/workflows/backlog-expiry.yml`,
    `seed/pull_request_template.md` → `.github/pull_request_template.md`.
-   Fill every `{{PLACEHOLDER}}` from the charter and the project's actual
-   stack. The copy is a divorce: this repo owes sofa-claude nothing after.
-3. **Wire the repo**: create `dev` and `staging` from `main`; create labels
-   `urgent`, `keep`, and `standing`; create the standing handoff issue and
-   note its number in CLAUDE.md. Vercel wiring (which branch deploys where)
-   is Steve's step — list it for him in the needs-Steve digest, don't wait.
-4. **Propose the first unit**: one issue, frozen acceptance criteria, sized
-   to reach `dev` within a session. Product code, not process — if the
-   process pinches during the unit, that's a sofa-claude bleed to note,
-   not machinery to build here.
+   Fill every `{{PLACEHOLDER}}` from the charter and design record. The
+   copy is a divorce: this repo owes sofa-claude nothing after.
+4. **Wire the repo**: create `dev` and `staging` from `main`; **set `dev`
+   as the default branch** — unit issues then auto-close when their PR
+   merges to `dev` (closing keywords fire only on the default branch),
+   and new PRs target `dev` by default. Create labels `urgent`, `keep`,
+   `standing`; create the standing handoff issue and note its number in
+   CLAUDE.md. Vercel wiring is Steve's step — list it in the needs-Steve
+   digest, don't wait.
+5. **Propose the first unit**: one issue, frozen acceptance criteria,
+   sized to reach `dev` within a session. Product code, not process — if
+   the process pinches during the unit, that's a sofa-claude bleed to
+   note, not machinery to build here.
 
 Total bootstrap budget: one session, one PR into the workload's `dev`
-(charter + seed files). If it wants to grow beyond that, stop — that is a
-bleed to raise in sofa-claude, not a bigger bootstrap.
+(charter + design record + seed files). If it wants to grow beyond that,
+stop — that is a bleed to raise in sofa-claude, not a bigger bootstrap.
