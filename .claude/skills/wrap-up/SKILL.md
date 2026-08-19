@@ -16,6 +16,8 @@ description: End-of-session handoff — drain in-flight work, reconcile issue st
    handoff.
 4. Refresh the **body** of Issue #2 (needs-Steve digest): list only items
    genuinely blocked on Steve — pending merges/promotions, open grant
-   decisions, halted runs. An empty list is a valid and good state.
+   decisions, halted runs — each with its paste-ready command where one
+   applies (e.g. `/code-review high <PR URL> --comment`). An empty list is
+   a valid and good state.
 5. Give Steve a plain-English recap (what shipped, what's blocked, what's
    next) and a ready-to-paste prompt for the next session.

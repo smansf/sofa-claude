@@ -6,8 +6,8 @@ skills, and the "needs Steve" digest. Work happens in workload repos, never
 here. Account rules inherit from `~/.claude/CLAUDE.md`.
 
 Origin: rebuilt 2026-08 from `smansf/sofa-claude-legacy`, which spiraled into
-process-about-process. Diagnosis and full design rationale:
-[decisions/0001](decisions/0001-rebuild-from-legacy.md).
+process-about-process. Diagnosis: [decisions/0001](decisions/0001-rebuild-from-legacy.md);
+intake and review design: [decisions/0002](decisions/0002-discovered-work-and-review-lines.md).
 
 ## What this repo is not
 
@@ -25,24 +25,31 @@ back; good patterns are harvested back here occasionally, never pushed out.
   queue is the spiral detector — if it fills, the factory is manufacturing
   factory parts again.
 
-## Backlog
+## Discovered work
 
-- Intake kill step for mid-unit discoveries: fix now if inside the frozen
-  acceptance criteria; file only if severity:P1/P2 or it invalidates the
-  current unit's premise; otherwise drop it, silently. Filing is the
-  exception, not the default, and discoveries are never narrated in PRs.
-- `severity:P3` issues auto-close after 14 days untouched (scheduled
-  workflow). P1/P2 and `standing` are exempt. A P3 dying unworked is the
-  system working, not a loss.
+- First triage, at discovery: fix in flight only what blocks the current
+  unit or is a trivial defect in code already being touched — hard-capped
+  at trivial size; the moment it wants its own design, file it instead.
+  Everything else real is filed, at any severity, **silently** — never
+  narrated in PRs, recaps, or the digest. Noise floor: if no one can say
+  who gets hurt and how, it is opinion, not work, and is not filed.
+- Second triage, on the issue — one question, what happens if nobody acts:
+  `urgent` (invalidates the active unit's premise, or active harm —
+  interrupts work now), `keep` (must eventually be fixed — never expires),
+  or unlabeled (the default — auto-closes after 14 days untouched; closed,
+  not deleted, so the record stays searchable). Complexity and size are
+  judged at pickup as the unit's tier, never at filing.
 - Acceptance criteria are frozen on the issue before work starts. Done means
   merged. A work stream states its end condition when it opens, and ends.
 
-## Proportionality
+## Review
 
-Review depth scales with product stakes, never diff contents. In a throwaway
-repo everything is trivial tier, no exceptions. One review round per unit; a
-second round only for P1/P2 findings — everything else follows the intake
-kill step.
+Depth scales with product stakes, never diff contents. One round per unit; a
+second round only for `urgent`/`keep`-grade findings — the rest follow the
+intake rule. Design/governance prose gets the adversarial brief review, its
+brief visible in the PR before it runs. Code review is Steve's to type —
+the process hands him the exact `/code-review <effort> <PR URL> --comment`
+command in the PR body or digest; Claude never invokes or replicates it.
 
 ## Skills
 

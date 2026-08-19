@@ -18,7 +18,7 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    Fill every `{{PLACEHOLDER}}` from the charter and the project's actual
    stack. The copy is a divorce: this repo owes sofa-claude nothing after.
 3. **Wire the repo**: create `dev` and `staging` from `main`; create labels
-   `severity:P1/P2/P3` and `standing`; create the standing handoff issue and
+   `urgent`, `keep`, and `standing`; create the standing handoff issue and
    note its number in CLAUDE.md. Vercel wiring (which branch deploys where)
    is Steve's step — list it for him in the needs-Steve digest, don't wait.
 4. **Propose the first unit**: one issue, frozen acceptance criteria, sized

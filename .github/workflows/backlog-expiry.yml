@@ -17,12 +17,14 @@ jobs:
           days-before-issue-close: 4
           stale-issue-label: expiring
           stale-issue-message: >-
-            No activity for 10 days. Closes in 4 more unless touched — per the
-            intake rule, expiry is the system working, not a loss.
+            No activity for 10 days. Closes in 4 more unless touched — per
+            decisions/0002, expiry of unlabeled issues is the system working.
+            Label it `keep` if it must persist.
           close-issue-message: >-
-            Expired unworked. If this genuinely matters, it will bleed again
-            in real work and can be refiled with that evidence.
-          exempt-issue-labels: "severity:P1,severity:P2,standing"
+            Expired unworked; closed, not deleted — this record stays
+            searchable. If it genuinely matters it will bleed again and can
+            be refiled (or reopened) with that evidence.
+          exempt-issue-labels: "urgent,keep,standing"
           days-before-pr-stale: -1
           days-before-pr-close: -1
           operations-per-run: 100

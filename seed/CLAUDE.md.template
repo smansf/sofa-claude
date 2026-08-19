@@ -26,11 +26,16 @@ bootstrap {{DATE}}; this repo owes it nothing).
   Done = merged to `dev`. No unit reopens; follow-ups are new intake.
 - TDD: failing test first, then code. CI enforces the coverage floor of
   {{COVERAGE_FLOOR}}% — a floor to hold, never a number to climb.
-- Mid-unit discoveries: fix now if inside the frozen AC; file only if
-  severity:P1/P2 or it invalidates the unit's premise; otherwise drop
-  silently. P3 issues auto-expire after 14 days untouched.
-- Review: one round per unit, scaled to the charter's stakes tier; a second
-  round only for P1/P2 findings.
+- Discovered work, first triage: fix in flight only what blocks the unit or
+  is a trivial defect in code already being touched (capped at trivial —
+  wants design ⇒ file it). Everything else real is filed silently, at any
+  severity; observations with no statable harm scenario are not filed.
+- Second triage, on the issue: `urgent` (interrupts current work), `keep`
+  (never expires), or unlabeled (default — auto-expires after 14 days
+  untouched). Tier, and whether it needs a spec, is judged at pickup.
+- Review: `dev` merges take green CI plus one fresh-context reviewer round,
+  scaled to the charter's stakes tier. Promotion PRs hand Steve the
+  paste-ready `/code-review <effort> <PR URL> --comment` command.
 
 ## Never
 
