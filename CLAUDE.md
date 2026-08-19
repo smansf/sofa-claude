@@ -5,9 +5,8 @@ workload repos copy at bootstrap, the governance record, a small closed set of
 skills, and the "needs Steve" digest. Work happens in workload repos, never
 here. Account rules inherit from `~/.claude/CLAUDE.md`.
 
-Origin: rebuilt 2026-08 from `smansf/sofa-claude-legacy`, which spiraled into
-process-about-process. Diagnosis: [decisions/0001](decisions/0001-rebuild-from-legacy.md);
-intake and review design: [decisions/0002](decisions/0002-discovered-work-and-review-lines.md).
+Origin: rebuilt 2026-08 from `smansf/sofa-claude-legacy`, which spiraled
+into process-about-process. All rationale lives in `decisions/` (start at 0001).
 
 ## What this repo is not
 
@@ -56,13 +55,12 @@ command in the PR body or digest; Claude never invokes or replicates it.
 
 ## Skills
 
-The set is closed: `onboard`, `wrap-up`, `bootstrap`, `doc-review`. Adding
-one takes a bleed, like any rule. Skills are the operator's toolbox, not
-repo content: installed to `~/.claude/skills/` as copies from merged
-`main` only — never symlinked, never from a branch — and a skill may
-never require a repo convention a bootstrapped repo lacks. `/onboard`
-first in every session (reads Issue #1's body only); `/wrap-up` before
-ending a substantive session (refreshes Issues #1 and #2).
+The set is closed: `onboard`, `wrap-up`, `bootstrap`, `doc-review` —
+adding one takes a bleed. Skills are the operator's toolbox, not repo
+content: installed to `~/.claude/skills/` as copies from merged `main`
+only (never a branch), and may never require a convention a bootstrapped
+repo lacks. `/onboard` first in every session (reads Issue #1's body
+only); `/wrap-up` before ending one (refreshes Issues #1 and #2).
 
 ## Rulebook budget
 
