@@ -39,26 +39,34 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    record both silently lie until it's fixed). Unit issues then auto-close
    when their PR merges to `dev`, and new PRs target `dev` by default.
    Create labels `urgent`, `keep`,
-   `standing`; create the standing handoff issue and note its number in
-   CLAUDE.md. Vercel wiring is Steve's step — list it in the needs-Steve
+   `standing`; create the standing handoff issue **labeled `standing`**
+   (unlabeled, the repo's own expiry workflow will close it) and note its
+   number in CLAUDE.md. Vercel wiring is Steve's step — list it in the needs-Steve
    digest, don't wait.
 5. **Propose the first unit**: one issue, frozen acceptance criteria,
    sized to reach `dev` within a session. Product code, not process — if
    the process pinches during the unit, that's a sofa-claude bleed to
    note, not machinery to build here.
 6. **Verify and file** — bootstrap closes by checking, not asserting.
-   Mechanically confirm each wired item via `gh`: default branch is `dev`
-   (`gh repo view --json defaultBranchRef`); labels `urgent`, `keep`,
-   `standing` exist (`gh label list`); `.github/ISSUE_TEMPLATE/unit.yml`,
-   `.github/ISSUE_TEMPLATE/config.yml` with `blank_issues_enabled: false`,
-   and `.github/workflows/backlog-expiry.yml` all exist on the default
-   branch; the standing handoff issue exists and CLAUDE.md names its
-   number. Every gap gets filed, none get re-fixed silently: a repo-local
-   gap becomes a `keep` issue **in the new repo** naming which guarantee
-   silently lies until it's fixed (auto-close, expiry, deploy gates); a
-   Steve-owed item (Vercel wiring, ruleset creation) goes in the
-   needs-Steve digest with the exact steps. Bootstrap ends only when this
-   step reports all-green or every gap is filed.
+   Runs **after the bootstrap PR merges**; if the session ends first
+   (production stakes waiting on Steve's review), record step 6 as owed
+   in the new repo's handoff issue — the next session runs it before any
+   unit work. Mechanically confirm, via `gh` against the default branch,
+   every item steps 3–4 claimed: default branch is `dev`; `staging`
+   exists; labels `urgent`, `keep`, `standing` exist; `ci.yml`,
+   `backlog-expiry.yml`, `pull_request_template.md`, both issue templates
+   (`config.yml` with `blank_issues_enabled: false`), and
+   `scripts/merge_dev.py` (its `REQUIRED_CHECKS` matching ci.yml's job
+   names) are all present; the standing handoff issue exists, carries
+   `standing`, and CLAUDE.md names its number. A failed check that one
+   `gh` command repairs is re-run once, re-verified, and noted in the
+   bootstrap PR — repaired loudly, never silently. What still fails gets
+   filed in the new repo, labeled by the seeded triage doctrine —
+   `urgent` when it invalidates the first unit's premise, else `keep`;
+   a wrong default branch additionally stays under step 4's
+   stop-and-digest rule. Steve-owed items (Vercel wiring, ruleset
+   creation) go in the needs-Steve digest with the exact steps.
+   Bootstrap ends only when every check is green or every gap is filed.
 
 Total bootstrap budget: one session, one PR into the workload's `dev`
 (charter + design record + seed files). If it wants to grow beyond that,
