@@ -46,10 +46,13 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    is collected, and that is correct — a `test` job that ran no tests is
    not a passing `test` job, and a CI branch that reports SUCCESS having
    run nothing is the legacy failure (0005) rebuilt inside the test gate.
-   The default that always works: a test asserting `docs/charter.md`
-   states an end condition and the test floor, which is a real invariant
-   that really breaks. Fill `{{TEST_COMMAND_WITH_FLOOR}}` so it exercises
-   it.
+   Ship the smallest real module the charter implies — the CLI entry
+   point, the one exported function — plus a test covering it. A charter
+   assertion test alone is not enough when the floor is a coverage
+   percentage: `--cov-fail-under` against a repo with no product code
+   reports no data and fails, which is defect 2 recurring one step later,
+   because the floor and the test run are the same command. Real module
+   plus real test satisfies every floor shape.
 4. **Wire the repo**: create `dev` and `staging` from `main`; **set `dev`
    as the default branch, then verify it stuck** (`gh repo view --json
    defaultBranchRef` must say `dev` — if it doesn't, stop wiring and put
@@ -89,13 +92,15 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    (`config.yml` with `blank_issues_enabled: false`), `.gitignore`, and
    `scripts/merge_dev.py` (its `REQUIRED_CHECKS` matching ci.yml's job
    names, its executable bit intact) are all present;
-   **no seed placeholder survives** in any copied file — grep for
-   `{{[A-Z_]\+}}`, the seed's own placeholder shape, **not** a bare `{{`,
-   which would match the workflows' legitimate `${{ secrets.GITHUB_TOKEN }}`
-   and fail on every bootstrap forever; an unfilled placeholder is the seed
-   silently ceasing to be authoritative, which is the defect class this
-   step exists for. The `test` job ran a real command and the repo tracks
-   at least one test file. `deleteBranchOnMerge` is false, or the
+   **no seed placeholder survives** in any copied file — grep for `{{`
+   and discard only `${{` (GitHub Actions expressions, which are
+   legitimate and permanent). Do not narrow this to `{{[A-Z_]\+}}`: the
+   stakes tier is written `{{throwaway | standard | production}}` and
+   would slip through, leaving review depth read off an unfilled slot
+   forever. An unfilled placeholder is the seed silently ceasing to be
+   authoritative, which is the defect class this step exists for. The
+   `test` job ran a real command, and the repo tracks at least one test
+   file and the module it covers. `deleteBranchOnMerge` is false, or the
    needs-Steve digest carries it with the click path;
    the standing handoff issue exists, carries `standing`, and CLAUDE.md
    names its number. A failed check that one `gh` command repairs is

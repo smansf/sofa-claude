@@ -11,6 +11,8 @@ venv/
 node_modules/
 dist/
 build/
+.next/
+.vercel/
 *.egg-info/
 .coverage
 htmlcov/
