@@ -46,6 +46,19 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    sized to reach `dev` within a session. Product code, not process — if
    the process pinches during the unit, that's a sofa-claude bleed to
    note, not machinery to build here.
+6. **Verify and file** — bootstrap closes by checking, not asserting.
+   Mechanically confirm each wired item via `gh`: default branch is `dev`
+   (`gh repo view --json defaultBranchRef`); labels `urgent`, `keep`,
+   `standing` exist (`gh label list`); `.github/ISSUE_TEMPLATE/unit.yml`,
+   `.github/ISSUE_TEMPLATE/config.yml` with `blank_issues_enabled: false`,
+   and `.github/workflows/backlog-expiry.yml` all exist on the default
+   branch; the standing handoff issue exists and CLAUDE.md names its
+   number. Every gap gets filed, none get re-fixed silently: a repo-local
+   gap becomes a `keep` issue **in the new repo** naming which guarantee
+   silently lies until it's fixed (auto-close, expiry, deploy gates); a
+   Steve-owed item (Vercel wiring, ruleset creation) goes in the
+   needs-Steve digest with the exact steps. Bootstrap ends only when this
+   step reports all-green or every gap is filed.
 
 Total bootstrap budget: one session, one PR into the workload's `dev`
 (charter + design record + seed files). If it wants to grow beyond that,
