@@ -1,5 +1,5 @@
 # Seed CI for a workload repo. Bootstrap adapts the stack-specific parts
-# ({{...}} placeholders) to the project's actual language and tooling.
+# (the placeholder markers) to the project's actual language and tooling.
 name: ci
 
 # claude/* branches are deliberately absent from the push list: every one
@@ -22,11 +22,29 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Tests with coverage floor
-        run: "{{TEST_COMMAND_WITH_COVERAGE_FLOOR}}"
+      # No zero-test escape hatch, deliberately. Runners that exit
+      # non-zero when nothing is collected (Python >=3.12's unittest exits
+      # 5) are doing the right thing: a test job that ran no tests is not
+      # a passing test job. The bootstrap PR therefore ships at least one
+      # real test — see the bootstrap skill — rather than CI carrying a
+      # branch that reports SUCCESS having run nothing. Block scalar so a
+      # multi-line fill (install, then a coverage-gated run) works: every
+      # continuation line must start at column 10, like the line below, or
+      # the YAML fails to parse and takes all three jobs down with it.
+      - name: Tests against the charter's floor
+        run: |
+          {{TEST_COMMAND_WITH_FLOOR}}
 
   secrets:
     runs-on: ubuntu-latest
+    # gitleaks-action reads PR commits and posts leak comments through the
+    # workflow token. Under a repo whose default token is read-only it dies
+    # with "Resource not accessible by integration" before scanning anything,
+    # so the seed states the permissions it needs instead of inheriting a
+    # repo setting it never names.
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
