@@ -1,0 +1,25 @@
+# Copied to .github/ISSUE_TEMPLATE/unit.yml at bootstrap. The form makes
+# acceptance criteria structurally required — a unit cannot be filed
+# without them.
+name: Unit
+description: One unit of work — acceptance criteria are frozen here before any code.
+title: "Unit: "
+body:
+  - type: textarea
+    id: what-why
+    attributes:
+      label: What and why
+      description: What this unit delivers, and why it matters to the charter.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Acceptance criteria
+      description: >-
+        Frozen once work starts. Each criterion must be testable; the unit
+        is done when all pass and the PR merges to dev. Discoveries during
+        the work follow the intake rule — they do not widen these criteria.
+      placeholder: "- [ ] ..."
+    validations:
+      required: true

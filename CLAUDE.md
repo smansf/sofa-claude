@@ -64,7 +64,7 @@ only); `/wrap-up` before ending one (refreshes Issues #1 and #2).
 
 ## Rulebook budget
 
-This file stays under 75 lines. Adding a rule means removing or merging one.
+This file stays under 75 lines (CI-enforced). A new rule removes or merges one.
 On conflict, this file is normative: decision records (`decisions/`, one
 page each) are dated rationale, never live rules. Grants (`governance/`)
 take effect only by Steve merging the PR that adds or amends them.
