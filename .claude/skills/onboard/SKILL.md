@@ -5,8 +5,9 @@ description: Start-of-session orientation — one cheap read of the standing han
 
 # onboard
 
-1. Read the **body only** of Issue #1 (`gh issue view 1 --json body`). Never
-   read its comments — they are an append-only log, not live state.
+1. Read the **body only** of Issue #1 (`gh issue view 1 --json body`). The
+   body is the whole handoff — GitHub's edit history preserves prior
+   versions; there is no comment log.
 2. Sanity-check the body against `git log --oneline -10` on `main` and the
    open-PR list. If the handoff predates visible activity, say so — treat
    the repo and GitHub as truth, the handoff as a pointer.

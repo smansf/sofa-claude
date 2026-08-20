@@ -45,3 +45,13 @@ jobs:
           else
             echo "No tests in this repo yet — nothing to run."
           fi
+
+  line-budget:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: CLAUDE.md stays under its 75-line budget
+        run: |
+          n=$(wc -l < CLAUDE.md); c=$(wc -c < CLAUDE.md)
+          echo "CLAUDE.md: $n lines (max 74), $c chars (max 4200)"
+          [ "$n" -le 74 ] && [ "$c" -le 4200 ]
