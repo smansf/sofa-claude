@@ -56,6 +56,9 @@ issues in 4 fix generations), the 137 KB living process doc.
   **sofa-scratch round two** — product reaches `main`; ≥60% of PRs are
   product PRs; ≤5 open issues at close-out; ≤30 minutes of Steve's time.
   Pass → bootstrap wilson. Fail → one blueprint revision, not a sub-project.
+  **Scored in 0006 (2026-08-20): failed, 1 of 4.** That record supplies the
+  counting rules these criteria lacked and names wilson's gates; read it
+  before applying any criterion above.
 - This repo's PR queue trending to zero is the health metric; it filling up
   is the alarm.
 - Full review document (postmortem + blueprint + rules ledger) is preserved
