@@ -26,21 +26,33 @@ Three levers, applied where outcomes are verifiable and never to judgment:
   approvals deliberately 0 until the machine account exists (an author
   cannot approve their own PR). A `line-budget` CI job now fails any PR
   that pushes CLAUDE.md past 74 lines.
-- **Paved paths.** Workload `dev` merges happen only via
-  `scripts/merge_dev.py` (seed kit, tested at source): it refuses unless
-  CI is green, a `## Reviewer pass` comment exists, the base is `dev`,
-  the head is `claude/*`, and the PR isn't draft — one instruction
-  replacing four rules, `gh`-native underneath. Unit issues are filed via
-  a GitHub issue form that makes acceptance criteria required at
-  creation.
+- **Paved paths — honestly classified after this PR's own doc-review.**
+  Workload `dev` merges go via `scripts/merge_dev.py` (seed kit, tested
+  at source): it refuses unless every *named required check* succeeded
+  (absent is not green; skipped is not green for required checks), a
+  fresh-context reviewer comment *starting* with the marker exists (and
+  no refusal text can double as the credential), the base is `dev`, the
+  head is `claude/*`, and the PR isn't draft. Transport failures are loud
+  and explicitly forbid the by-hand workaround. This is a **paved path,
+  not a wall**: on free private repos nothing stops a raw `gh pr merge`,
+  so the rule "merging any other way is a defect" remains
+  instruction-backed — named here so nobody mistakes it for enforced.
+  Unit issues: the web form requires acceptance criteria and blank issues
+  are disabled, but `gh`-filed issues bypass forms — the form is a
+  web-path guardrail; the gh path remains instruction-backed.
 - **Boundary.** Stakes tiers, triage, review content, promotion timing
   stay judgment — mechanizing judgment is the legacy theater trap.
 
 ## Consequences
 
-A weak model can no longer merge red, oversize the rulebook, file an
-AC-less unit, or merge a workload PR that skipped review — those failures
-became impossible rather than prohibited. Prose shrinks as gates land.
-After this PR merges, Steve adds `line-budget` to the ruleset's required
-checks (30 seconds). Issues #5 and #7 remain the next mechanizations,
-scheduled with the Grant 1 rails.
+On sofa-claude, merging red or oversizing the rulebook became impossible
+(ruleset + `line-budget`, which caps characters as well as lines so
+rule-joining can't dodge it). On workload repos, the riskiest moments
+became one-instruction paved paths with loud refusals — materially
+harder to get wrong, but still instruction-backed at the edges named
+above. Residual bypasses are recorded, not denied: raw `gh pr merge`,
+`gh`-filed AC-less units, a self-posted reviewer marker, and the stale
+reviewer credential (Issue #10, `keep`). After this PR merges, Steve
+adds `line-budget` to the ruleset's required checks (30 seconds).
+Issues #5, #7, and #10 are the next mechanizations, scheduled with the
+Grant 1 rails.

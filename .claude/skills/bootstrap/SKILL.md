@@ -27,7 +27,9 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    `seed/workflows/backlog-expiry.yml` → `.github/workflows/backlog-expiry.yml`,
    `seed/pull_request_template.md` → `.github/pull_request_template.md`,
    `seed/ISSUE_TEMPLATE/unit.yml` → `.github/ISSUE_TEMPLATE/unit.yml`,
-   `seed/scripts/merge_dev.py` → `scripts/merge_dev.py`.
+   `seed/ISSUE_TEMPLATE/config.yml` → `.github/ISSUE_TEMPLATE/config.yml`,
+   `seed/scripts/merge_dev.py` → `scripts/merge_dev.py` (align its
+   `REQUIRED_CHECKS` with the workload ci.yml's job names).
    Fill every `{{PLACEHOLDER}}` from the charter and design record. The
    copy is a divorce: this repo owes sofa-claude nothing after.
 4. **Wire the repo**: create `dev` and `staging` from `main`; **set `dev`

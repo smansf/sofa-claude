@@ -1,6 +1,7 @@
-# Copied to .github/ISSUE_TEMPLATE/unit.yml at bootstrap. The form makes
-# acceptance criteria structurally required — a unit cannot be filed
-# without them.
+# Copied to .github/ISSUE_TEMPLATE/unit.yml at bootstrap. The web form
+# requires acceptance criteria at creation; an issue filed via `gh` must
+# carry the same sections by rule — the form is a guardrail for the web
+# path, not a universal gate.
 name: Unit
 description: One unit of work — acceptance criteria are frozen here before any code.
 title: "Unit: "

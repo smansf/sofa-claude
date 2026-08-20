@@ -52,6 +52,6 @@ jobs:
       - uses: actions/checkout@v4
       - name: CLAUDE.md stays under its 75-line budget
         run: |
-          n=$(wc -l < CLAUDE.md)
-          echo "CLAUDE.md: $n lines (max 74)"
-          [ "$n" -le 74 ]
+          n=$(wc -l < CLAUDE.md); c=$(wc -c < CLAUDE.md)
+          echo "CLAUDE.md: $n lines (max 74), $c chars (max 4200)"
+          [ "$n" -le 74 ] && [ "$c" -le 4200 ]
