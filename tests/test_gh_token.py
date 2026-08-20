@@ -27,7 +27,7 @@ def _mint(*args, **kwargs):
     captured = {}
 
     def fake_api(path, bearer, method="GET", payload=None):
-        if path == "/app/installations":
+        if path.startswith("/app/installations?"):
             return [{"id": 42, "account": {"login": "warblersafety"}}]
         captured["path"] = path
         captured["payload"] = payload
@@ -148,17 +148,30 @@ class OrgLevelTests(unittest.TestCase):
                                   "--reason", "trying it on", "--", "true"])
         self.assertEqual(code, 2)
 
-    def test_create_repo_does_not_return_the_token(self):
+    def _create(self, **over):
         seen = {}
 
-        def fake_mint(*args, **kwargs):
-            seen["permissions"] = args[2]
+        def fake_mint(account, repositories, permissions, **kwargs):
+            seen["repositories"] = repositories
+            seen["permissions"] = permissions
             seen["allow"] = kwargs.get("_allow_org_level")
             return "ghs_secret", "2026-08-21T00:00:00Z"
 
+        kwargs = dict(reason="bootstrap", scope_repo="scratch")
+        kwargs.update(over)
         with mock.patch.object(gh_token, "mint", fake_mint), \
              mock.patch.object(gh_token, "api", lambda *a, **k: {"full_name": "o/r"}):
-            result = gh_token.create_repo("warblersafety", "r", reason="bootstrap")
+            result = gh_token.create_repo("warblersafety", "wilson", **kwargs)
+        return result, seen
+
+    def test_create_repo_scopes_to_an_existing_repo_not_the_new_one(self):
+        """The repo being created does not exist yet; GitHub 422s on it."""
+        _, seen = self._create()
+        self.assertEqual(seen["repositories"], ["scratch"])
+        self.assertNotIn("wilson", seen["repositories"])
+
+    def test_create_repo_does_not_return_the_token(self):
+        result, seen = self._create()
         self.assertEqual(result, {"full_name": "o/r"})
         self.assertNotIn("ghs_secret", json.dumps(result))
         self.assertTrue(seen["allow"])
@@ -167,7 +180,16 @@ class OrgLevelTests(unittest.TestCase):
 
     def test_create_repo_requires_a_reason(self):
         with self.assertRaises(gh_token.TokenError):
-            gh_token.create_repo("warblersafety", "r", reason="")
+            self._create(reason="")
+
+    def test_create_repo_refuses_to_scope_to_the_repo_being_created(self):
+        with self.assertRaises(gh_token.TokenError) as caught:
+            self._create(scope_repo="wilson")
+        self.assertIn("does not exist yet", str(caught.exception))
+
+    def test_create_repo_refuses_an_empty_scope(self):
+        with self.assertRaises(gh_token.TokenError):
+            self._create(scope_repo="")
 
 
 class AuditTests(unittest.TestCase):
@@ -181,6 +203,7 @@ class AuditTests(unittest.TestCase):
             entry = json.loads(log.read_text().strip())
         self.assertEqual(entry["repositories"], ["scratch"])
         self.assertEqual(entry["reason"], "bootstrap: apply protect-main")
+        self.assertEqual(entry["event"], "requested")
         self.assertIn("at", entry)
 
     def test_record_never_contains_a_token(self):
@@ -230,13 +253,64 @@ class NoCredentialLeakTests(unittest.TestCase):
         self.assertNotIn("ghs_secret", " ".join(captured["command"]))
 
 
+class ArgumentTests(unittest.TestCase):
+    def test_only_the_leading_separator_is_stripped(self):
+        """`--` inside the child command is the child's, not argparse's."""
+        captured = {}
+
+        def fake_run(command, env=None):
+            captured["command"] = command
+            return subprocess.CompletedProcess(command, 0)
+
+        with mock.patch.object(gh_token, "mint",
+                               lambda *a, **k: ("ghs_secret", "later")), \
+             mock.patch.object(gh_token.subprocess, "run", fake_run):
+            gh_token.main(["--account", "o", "--repos", "r", "--perm",
+                           "contents=write", "--",
+                           "git", "diff", "main", "--", "seed/"])
+        self.assertEqual(captured["command"],
+                         ["git", "diff", "main", "--", "seed/"])
+
+
+class ElevationRecordPairingTests(unittest.TestCase):
+    def test_a_failed_mint_leaves_only_a_request(self):
+        """A `requested` with no `granted` means access was never obtained."""
+        with tempfile.TemporaryDirectory() as tmp:
+            log = pathlib.Path(tmp) / "elevations.log"
+            with mock.patch.dict(os.environ, {"SOFA_AUDIT_LOG": str(log),
+                                              "SOFA_APP_ID": "1"}), \
+                 mock.patch.object(sys, "stderr", io.StringIO()), \
+                 mock.patch.object(gh_token, "app_jwt",
+                                   mock.Mock(side_effect=gh_token.TokenError("no key"))):
+                with self.assertRaises(gh_token.TokenError):
+                    gh_token.mint("o", ["r"], {"administration": "write"},
+                                  reason="wiring")
+            events = [json.loads(line)["event"]
+                      for line in log.read_text().splitlines()]
+        self.assertEqual(events, ["requested"])
+
+
 class NoStandingExecutionTests(unittest.TestCase):
-    def test_helper_starts_no_daemon_or_timer(self):
-        """Grant 1 is dormant: nothing here may begin work on its own."""
-        source = _path.read_text()
-        for forbidden in ("threading", "sched", "daemon", "launchd",
-                          "crontab", "LaunchAgent", "while True"):
-            self.assertNotIn(forbidden, source)
+    def test_helper_imports_nothing_that_can_schedule_work(self):
+        """Grant 1 is dormant: nothing here may begin work on its own.
+
+        Tests the module's imports rather than its source text -- a loop
+        that pages an API is not a timer, and a spelling check cannot tell
+        the difference.
+        """
+        imported = {name.split(".")[0]
+                    for name in dir(gh_token)
+                    if isinstance(getattr(gh_token, name, None), type(os))}
+        for scheduler in ("threading", "sched", "asyncio", "signal",
+                          "multiprocessing"):
+            self.assertNotIn(scheduler, imported)
+
+    def test_subprocess_is_only_used_to_sign_and_to_run_the_child(self):
+        """The only processes started are openssl and the caller's command."""
+        import inspect
+        calls = [line.strip() for line in inspect.getsource(gh_token).splitlines()
+                 if "subprocess.run(" in line]
+        self.assertEqual(len(calls), 2, calls)
 
 
 if __name__ == "__main__":

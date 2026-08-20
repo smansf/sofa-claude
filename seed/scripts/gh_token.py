@@ -121,21 +121,41 @@ def api(path, bearer, method="GET", payload=None):
 
 
 def installation_id(account, jwt):
-    """The App's installation on `account` (an org or user login)."""
-    for inst in api("/app/installations", jwt):
-        if ((inst.get("account") or {}).get("login") or "").lower() == account.lower():
-            return inst["id"]
+    """The App's installation on `account` (an org or user login).
+
+    Paginated: the default page size is 30, and reporting "no installation"
+    for an account on page two would send the operator off to redo a
+    ceremony that is already done.
+    """
+    page, per_page = 1, 100
+    while True:
+        batch = api(f"/app/installations?per_page={per_page}&page={page}", jwt)
+        for inst in batch:
+            if ((inst.get("account") or {}).get("login") or "").lower() == account.lower():
+                return inst["id"]
+        if len(batch) < per_page:
+            break
+        page += 1
     raise TokenError(
         f"The App has no installation on {account!r}. Install it there first "
         f"-- installing an App is Steve's step, not Claude's.")
 
 
-def record_elevation(account, repositories, permissions, reason, audit_path=None):
-    """Append a durable audit record. Fails closed: no record, no token."""
+def record_elevation(account, repositories, permissions, reason,
+                     audit_path=None, event="requested"):
+    """Append a durable audit record. Fails closed: no record, no token.
+
+    Written twice per elevation: `requested` before minting, so a failure
+    to record blocks the mint, and `granted` once a token actually exists.
+    A lone `requested` therefore means the elevation was authorised but
+    never happened -- a missing key, a rejected call -- which keeps the log
+    from implying access that was never obtained.
+    """
     path = pathlib.Path(os.path.expanduser(
         audit_path or os.environ.get("SOFA_AUDIT_LOG") or DEFAULT_AUDIT))
     entry = {
         "at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "event": event,
         "account": account,
         "repositories": sorted(repositories),
         "permissions": dict(sorted(permissions.items())),
@@ -198,20 +218,43 @@ def mint(account, repositories, permissions, reason=None, app_id=None,
     result = api(f"/app/installations/{installation_id(account, jwt)}/access_tokens",
                  jwt, "POST",
                  {"repositories": list(repositories), "permissions": dict(permissions)})
+    if elevated:
+        record_elevation(account, repositories, permissions, reason,
+                         event="granted")
     return result["token"], result.get("expires_at")
 
 
-def create_repo(org, name, reason, private=True, app_id=None, key_path=None):
+def create_repo(org, name, reason, scope_repo, private=True,
+                app_id=None, key_path=None):
     """Create `org/name`. The only operation permitted org-level access.
 
-    The org-admin token is minted, used once, and dropped -- it is never
-    returned, so no caller can reuse it for anything else. GitHub requires
-    BOTH organization-level and repository-level administration here
-    (verified 2026-08-20); the repository list cannot bound the former.
+    The org-admin token is minted, used once, and dropped -- never
+    returned, so no caller can reuse it. GitHub requires BOTH
+    organization-level and repository-level administration here (verified
+    2026-08-20).
+
+    `scope_repo` must name an **existing** repository. The token cannot be
+    scoped to the repo being created -- it does not exist yet, and GitHub
+    rejects a repository list naming anything absent -- and it cannot be
+    scoped to nothing, since an empty list silently means all. So the
+    repository-level half of this token lands on whichever existing repo
+    is named: pass the throwaway scratch repo, whose admin exposure costs
+    nothing. The org-level half is installation-wide regardless; no
+    scoping arrangement changes that (Grant 4).
+
+    Consequence worth knowing at bootstrap time: an org with no
+    repositories at all has nothing to scope to, so its first repository
+    is Steve's to create by hand.
     """
     if not (reason or "").strip():
         raise TokenError("create_repo requires a stated reason.")
-    token, _ = mint(org, [name],
+    if not scope_repo or scope_repo == name:
+        raise TokenError(
+            f"create_repo needs scope_repo to name an EXISTING repository, "
+            f"not {name!r}, which does not exist yet. GitHub rejects a "
+            f"repository list containing anything absent, and an empty list "
+            f"silently means all -- pass the throwaway scratch repo.")
+    token, _ = mint(org, [scope_repo],
                     {"organization_administration": "write",
                      "administration": "write"},
                     reason=reason, app_id=app_id, key_path=key_path,
@@ -242,7 +285,9 @@ def main(argv=None):
                         help="-- CMD ARGS: run CMD with GH_TOKEN set")
     args = parser.parse_args(argv)
 
-    command = [a for a in args.command if a != "--"]
+    # argparse.REMAINDER keeps the separator; drop only that leading one,
+    # never a `--` the child command means for itself (e.g. `git diff -- path`).
+    command = args.command[1:] if args.command[:1] == ["--"] else list(args.command)
     if not command:
         parser.error("give a command after -- ; this tool runs a command "
                      "under a token, it does not hand the token out")
