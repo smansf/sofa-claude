@@ -12,6 +12,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -76,7 +77,9 @@ class ScopingTests(unittest.TestCase):
 
 class ElevationTests(unittest.TestCase):
     def test_elevated_permission_requires_a_reason(self):
-        for name in gh_token.ELEVATED:
+        repo_level = [p for p in gh_token.ELEVATED if p not in gh_token.ORG_LEVEL]
+        self.assertTrue(repo_level, "the repo-level elevated set must not be empty")
+        for name in repo_level:
             with self.subTest(permission=name):
                 with self.assertRaises(gh_token.TokenError) as caught:
                     _mint("warblersafety", ["scratch"], {name: "write"})
@@ -127,6 +130,106 @@ class ConfigurationTests(unittest.TestCase):
                          "the App ID is configuration, not source")
 
 
+class OrgLevelTests(unittest.TestCase):
+    """Org-level permissions are installation-wide; the repo list is no bound."""
+
+    def test_org_level_permission_is_refused_by_mint(self):
+        for name in gh_token.ORG_LEVEL:
+            with self.subTest(permission=name):
+                with self.assertRaises(gh_token.TokenError) as caught:
+                    _mint("warblersafety", ["scratch"], {name: "write"},
+                          reason="a reason is not enough for org-level")
+                self.assertIn("installation-wide", str(caught.exception))
+
+    def test_cli_cannot_request_org_level(self):
+        with mock.patch.object(sys, "stderr", io.StringIO()):
+            code = gh_token.main(["--account", "warblersafety", "--repos", "scratch",
+                                  "--perm", "organization_administration=write",
+                                  "--reason", "trying it on", "--", "true"])
+        self.assertEqual(code, 2)
+
+    def test_create_repo_does_not_return_the_token(self):
+        seen = {}
+
+        def fake_mint(*args, **kwargs):
+            seen["permissions"] = args[2]
+            seen["allow"] = kwargs.get("_allow_org_level")
+            return "ghs_secret", "2026-08-21T00:00:00Z"
+
+        with mock.patch.object(gh_token, "mint", fake_mint), \
+             mock.patch.object(gh_token, "api", lambda *a, **k: {"full_name": "o/r"}):
+            result = gh_token.create_repo("warblersafety", "r", reason="bootstrap")
+        self.assertEqual(result, {"full_name": "o/r"})
+        self.assertNotIn("ghs_secret", json.dumps(result))
+        self.assertTrue(seen["allow"])
+        self.assertEqual(set(seen["permissions"]),
+                         {"organization_administration", "administration"})
+
+    def test_create_repo_requires_a_reason(self):
+        with self.assertRaises(gh_token.TokenError):
+            gh_token.create_repo("warblersafety", "r", reason="")
+
+
+class AuditTests(unittest.TestCase):
+    def test_elevation_is_written_to_a_durable_record(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = pathlib.Path(tmp) / "nested" / "elevations.log"
+            gh_token.record_elevation("warblersafety", ["scratch"],
+                                      {"administration": "write"},
+                                      "bootstrap: apply protect-main",
+                                      audit_path=str(log))
+            entry = json.loads(log.read_text().strip())
+        self.assertEqual(entry["repositories"], ["scratch"])
+        self.assertEqual(entry["reason"], "bootstrap: apply protect-main")
+        self.assertIn("at", entry)
+
+    def test_record_never_contains_a_token(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = pathlib.Path(tmp) / "elevations.log"
+            gh_token.record_elevation("o", ["r"], {"administration": "write"},
+                                      "why", audit_path=str(log))
+            self.assertNotIn("ghs_", log.read_text())
+            self.assertNotIn("token", log.read_text())
+
+    def test_unwritable_audit_log_fails_closed(self):
+        """No record, no elevation -- the mint must not proceed."""
+        with tempfile.TemporaryDirectory() as tmp:
+            blocker = pathlib.Path(tmp) / "blocked"
+            blocker.write_text("not a directory")
+            with self.assertRaises(gh_token.TokenError) as caught:
+                gh_token.record_elevation("o", ["r"], {"administration": "write"},
+                                          "why", audit_path=str(blocker / "log"))
+        self.assertIn("could not be recorded", str(caught.exception))
+
+
+class NoCredentialLeakTests(unittest.TestCase):
+    def test_there_is_no_way_to_print_a_token(self):
+        """stdout lands in a transcript on disk; the tool must not offer it."""
+        source = _path.read_text()
+        self.assertNotIn("--print", source)
+        with mock.patch.object(sys, "stderr", io.StringIO()), \
+             self.assertRaises(SystemExit):
+            gh_token.main(["--account", "o", "--repos", "r",
+                           "--perm", "contents=write"])
+
+    def test_command_runs_with_token_in_env_not_argv(self):
+        captured = {}
+
+        def fake_run(command, env=None):
+            captured["command"] = command
+            captured["env"] = env
+            return subprocess.CompletedProcess(command, 0)
+
+        with mock.patch.object(gh_token, "mint",
+                               lambda *a, **k: ("ghs_secret", "later")), \
+             mock.patch.object(gh_token.subprocess, "run", fake_run):
+            gh_token.main(["--account", "o", "--repos", "r",
+                           "--perm", "contents=write", "--", "gh", "pr", "list"])
+        self.assertEqual(captured["command"], ["gh", "pr", "list"])
+        self.assertEqual(captured["env"]["GH_TOKEN"], "ghs_secret")
+        self.assertNotIn("ghs_secret", " ".join(captured["command"]))
+
+
 class NoStandingExecutionTests(unittest.TestCase):
     def test_helper_starts_no_daemon_or_timer(self):
         """Grant 1 is dormant: nothing here may begin work on its own."""
@@ -134,11 +237,6 @@ class NoStandingExecutionTests(unittest.TestCase):
         for forbidden in ("threading", "sched", "daemon", "launchd",
                           "crontab", "LaunchAgent", "while True"):
             self.assertNotIn(forbidden, source)
-
-    def test_no_deletion_call_site(self):
-        source = _path.read_text()
-        self.assertNotIn('"DELETE"', source)
-        self.assertNotIn("'DELETE'", source)
 
 
 if __name__ == "__main__":

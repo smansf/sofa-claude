@@ -1,32 +1,47 @@
 #!/usr/bin/env python3
 """Mint a short-lived, least-privilege GitHub App installation token.
 
-Every GitHub credential this process uses comes from here. There is no
-unscoped path: callers name the repositories and the permissions, and get
-a token that carries those and nothing else. The App's ceiling stays high;
-the working credential sits far below it (governance/grants.md, Grant 4).
+Every GitHub credential this process uses comes from here. Callers name
+the repositories and the permissions, and get a token carrying those and
+nothing else. This is a paved path, not a wall -- the capability is the
+private key, and anything holding it can request whatever the installation
+allows. What this module constrains is the process's own conduct
+(governance/grants.md, Grant 4).
 
-Elevated permissions -- `administration` (which GitHub bundles repository
-deletion into) and `organization_administration` -- additionally require a
-stated reason, which is echoed to stderr. Elevation is meant to be rare,
-deliberate, and visible in a transcript, not ambient.
+Two limits are worth stating because they are counter-intuitive:
 
-Prefer `--exec`, which sets GH_TOKEN for one child process only, so the
-token never reaches stdout, a log, or a shell variable that outlives the
-command. `--print` exists for callers that genuinely cannot use `--exec`.
+* A token's repository list bounds REPOSITORY-level permissions only.
+  ORG-level permissions are installation-wide and ignore it entirely --
+  verified against the API, not inferred. So org-level permission is not
+  offered as something a caller may request: `create_repo()` is the one
+  operation that uses it, minting and discarding internally, and the
+  command line refuses org-level permissions outright.
+
+* `administration` is what applies a ruleset, and therefore what can
+  remove one -- the human-only merge gate lives inside the same permission
+  bootstrap needs to create it. GitHub bundles repository deletion in
+  there too and will not let us split it off.
+
+Elevated permissions require a stated reason and append an audit record.
+If the record cannot be written, nothing is minted: no record, no
+elevation. There is deliberately no way to print a token to stdout --
+in this environment stdout lands in a transcript on disk and in model
+context, where it would outlive the command that needed it.
 
 Configuration (no value is ever hardcoded):
-    SOFA_APP_ID    the App's numeric ID
-    SOFA_APP_KEY   path to its PEM private key (default ~/.config/sofa-claude/app.pem)
+    SOFA_APP_ID     the App's numeric ID
+    SOFA_APP_KEY    path to its PEM private key (default ~/.config/sofa-claude/app.pem)
+    SOFA_AUDIT_LOG  elevation record (default ~/.config/sofa-claude/elevations.log)
 
 Usage:
     gh_token.py --account ORG --repos a,b --perm contents=write -- gh pr list
     gh_token.py --account ORG --repos a --perm administration=write \
-                --reason "bootstrap: apply protect-main ruleset" -- ...
+                --reason "bootstrap: apply protect-main ruleset" -- gh api ...
 """
 
 import argparse
 import base64
+import datetime
 import json
 import os
 import pathlib
@@ -38,9 +53,16 @@ import urllib.request
 
 API = "https://api.github.com"
 DEFAULT_KEY = "~/.config/sofa-claude/app.pem"
-# GitHub bundles repository deletion into `administration`; it cannot be
-# split off. Requesting either of these must therefore be deliberate.
-ELEVATED = ("administration", "organization_administration")
+DEFAULT_AUDIT = "~/.config/sofa-claude/elevations.log"
+
+# Installation-wide: a token's repository list does NOT bound these.
+ORG_LEVEL = ("organization_administration", "members", "organization_secrets",
+             "organization_projects", "organization_hooks",
+             "organization_self_hosted_runners", "organization_user_blocking")
+# Requesting any of these requires a reason and leaves an audit record.
+# `administration` carries deletion AND ruleset removal; `secrets`,
+# `actions` and `workflows` can install or feed code that runs with them.
+ELEVATED = ORG_LEVEL + ("administration", "secrets", "actions", "workflows")
 
 
 class TokenError(RuntimeError):
@@ -108,13 +130,38 @@ def installation_id(account, jwt):
         f"-- installing an App is Steve's step, not Claude's.")
 
 
-def mint(account, repositories, permissions, reason=None,
-         app_id=None, key_path=None):
-    """Return a short-lived token carrying exactly `permissions` on `repositories`.
+def record_elevation(account, repositories, permissions, reason, audit_path=None):
+    """Append a durable audit record. Fails closed: no record, no token."""
+    path = pathlib.Path(os.path.expanduser(
+        audit_path or os.environ.get("SOFA_AUDIT_LOG") or DEFAULT_AUDIT))
+    entry = {
+        "at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "account": account,
+        "repositories": sorted(repositories),
+        "permissions": dict(sorted(permissions.items())),
+        "reason": reason.strip(),
+    }
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(entry, sort_keys=True) + "\n")
+    except OSError as err:
+        raise TokenError(
+            f"Refusing to mint: the elevation could not be recorded at {path} "
+            f"({err}). An elevation no one can audit later is not a control "
+            f"(Grant 4) -- fix the path or the permissions, do not proceed.")
+    return entry
 
-    `repositories` and `permissions` are required and must be non-empty:
-    there is deliberately no way to ask this function for everything the
-    installation can do.
+
+def mint(account, repositories, permissions, reason=None, app_id=None,
+         key_path=None, _allow_org_level=False):
+    """Return (token, expires_at) carrying exactly `permissions` on `repositories`.
+
+    Both scoping arguments are required and must be non-empty: there is
+    deliberately no way to ask for everything the installation can do.
+    Org-level permissions are rejected here -- they cannot be bounded by
+    the repository list, so they are reachable only through the single
+    operation that needs them (`create_repo`).
     """
     if not repositories:
         raise TokenError(
@@ -124,25 +171,53 @@ def mint(account, repositories, permissions, reason=None,
         raise TokenError(
             "Refusing to mint: no permissions named. Least privilege is the "
             "only path -- name the permissions this task actually needs.")
+    org_level = sorted(p for p in permissions if p in ORG_LEVEL)
+    if org_level and not _allow_org_level:
+        raise TokenError(
+            f"Refusing to mint {', '.join(org_level)}: organization-level "
+            f"permissions are installation-wide and are NOT bounded by the "
+            f"repository list, so there is no such thing as a scoped one. "
+            f"They are reachable only through create_repo(), which mints and "
+            f"discards internally (Grant 4).")
     elevated = sorted(p for p in permissions if p in ELEVATED)
     if elevated and not (reason or "").strip():
         raise TokenError(
             f"Refusing to mint {', '.join(elevated)} without a stated reason. "
-            f"These carry repository deletion, which GitHub does not let us "
-            f"split off. Pass --reason naming the single call this is for.")
+            f"`administration` carries repository deletion and ruleset "
+            f"removal, which GitHub does not let us split off. Pass --reason "
+            f"naming the single call this is for.")
     app_id = app_id or os.environ.get("SOFA_APP_ID")
     if not app_id:
         raise TokenError("SOFA_APP_ID is not set; it is the App's numeric ID.")
     key_path = key_path or os.environ.get("SOFA_APP_KEY") or DEFAULT_KEY
     if elevated:
-        print(f"[gh_token] elevated ({', '.join(elevated)}) on "
-              f"{account}/{{{','.join(repositories)}}}: {reason.strip()}",
-              file=sys.stderr)
+        entry = record_elevation(account, repositories, permissions, reason)
+        print(f"[gh_token] elevated ({', '.join(elevated)}) recorded: "
+              f"{entry['reason']}", file=sys.stderr)
     jwt = app_jwt(app_id, key_path)
     result = api(f"/app/installations/{installation_id(account, jwt)}/access_tokens",
                  jwt, "POST",
                  {"repositories": list(repositories), "permissions": dict(permissions)})
     return result["token"], result.get("expires_at")
+
+
+def create_repo(org, name, reason, private=True, app_id=None, key_path=None):
+    """Create `org/name`. The only operation permitted org-level access.
+
+    The org-admin token is minted, used once, and dropped -- it is never
+    returned, so no caller can reuse it for anything else. GitHub requires
+    BOTH organization-level and repository-level administration here
+    (verified 2026-08-20); the repository list cannot bound the former.
+    """
+    if not (reason or "").strip():
+        raise TokenError("create_repo requires a stated reason.")
+    token, _ = mint(org, [name],
+                    {"organization_administration": "write",
+                     "administration": "write"},
+                    reason=reason, app_id=app_id, key_path=key_path,
+                    _allow_org_level=True)
+    return api(f"/orgs/{org}/repos", token, "POST",
+               {"name": name, "private": bool(private), "auto_init": True})
 
 
 def _permission(arg):
@@ -155,7 +230,7 @@ def _permission(arg):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        description="Mint a scoped, short-lived GitHub App token.")
+        description="Run a command under a scoped, short-lived GitHub App token.")
     parser.add_argument("--account", required=True,
                         help="org or user login the App is installed on")
     parser.add_argument("--repos", required=True,
@@ -163,29 +238,23 @@ def main(argv=None):
     parser.add_argument("--perm", required=True, action="append", type=_permission,
                         metavar="NAME=LEVEL", help="repeatable; e.g. contents=write")
     parser.add_argument("--reason", help="required for elevated permissions")
-    parser.add_argument("--print", dest="print_token", action="store_true",
-                        help="print the token to stdout (prefer -- CMD instead)")
     parser.add_argument("command", nargs=argparse.REMAINDER,
-                        help="-- CMD ARGS: run CMD with GH_TOKEN set, token never printed")
+                        help="-- CMD ARGS: run CMD with GH_TOKEN set")
     args = parser.parse_args(argv)
 
     command = [a for a in args.command if a != "--"]
-    if not command and not args.print_token:
-        parser.error("give a command after -- , or pass --print if you truly "
-                     "need the token itself")
+    if not command:
+        parser.error("give a command after -- ; this tool runs a command "
+                     "under a token, it does not hand the token out")
     try:
-        token, expires = mint(args.account,
-                              [r.strip() for r in args.repos.split(",") if r.strip()],
-                              dict(args.perm), args.reason)
+        token, _ = mint(args.account,
+                        [r.strip() for r in args.repos.split(",") if r.strip()],
+                        dict(args.perm), args.reason)
     except TokenError as err:
         print(f"CREDENTIAL FAILURE -- nothing was minted.\n{err}", file=sys.stderr)
         return 2
-    if command:
-        env = dict(os.environ, GH_TOKEN=token, GITHUB_TOKEN=token)
-        return subprocess.run(command, env=env).returncode
-    print(f"[gh_token] expires {expires}", file=sys.stderr)
-    print(token)
-    return 0
+    env = dict(os.environ, GH_TOKEN=token, GITHUB_TOKEN=token)
+    return subprocess.run(command, env=env).returncode
 
 
 if __name__ == "__main__":
