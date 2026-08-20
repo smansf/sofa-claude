@@ -90,9 +90,8 @@ def main(argv):
         return 2
     number = argv[1]
     try:
-        pr = json.loads(_gh(["pr", "view", number, "--json",
-                             "isDraft,state,baseRefName,headRefName,"
-                             "statusCheckRollup,comments"]))
+        fields = "isDraft,state,baseRefName,headRefName,statusCheckRollup,comments"
+        pr = json.loads(_gh(["pr", "view", number, "--json", fields]))
     except subprocess.CalledProcessError as err:
         return _transport_failure(err)
     bodies = [c.get("body", "") for c in pr.get("comments") or []]

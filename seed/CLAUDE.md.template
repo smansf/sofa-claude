@@ -42,8 +42,12 @@ bootstrap {{DATE}}; this repo owes it nothing).
   requires acceptance criteria; a `gh`-filed unit must carry the same
   sections); criteria are frozen before code. Done = merged to `dev`.
   No unit reopens; follow-ups are new intake.
-- TDD: failing test first, then code. CI enforces the coverage floor of
-  {{COVERAGE_FLOOR}}% — a floor to hold, never a number to climb.
+- TDD: failing test first, then code. CI enforces the charter's **test
+  floor** — {{TEST_FLOOR}} — a floor to hold, never a number to climb. The
+  floor takes whatever shape the charter's subject actually has (a coverage
+  percentage, fixture-corpus completeness, a property suite); it must be
+  mechanically checkable by CI, and a shape that forces a fake number is the
+  wrong shape.
 - Discovered work, first triage: fix in flight only what blocks the unit or
   is a trivial defect in code already being touched (capped at trivial —
   wants design ⇒ file it). Everything else real is filed silently, at any

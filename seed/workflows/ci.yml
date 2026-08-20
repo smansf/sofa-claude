@@ -22,11 +22,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Tests with coverage floor
-        run: "{{TEST_COMMAND_WITH_COVERAGE_FLOOR}}"
+      # The bootstrap PR ships zero tests by design, and some runners exit
+      # non-zero when none are collected (Python >=3.12's unittest does).
+      # The guard is self-limiting: it stops applying the moment unit 1 lands
+      # its first test file, so nobody has to remember to remove it — and it
+      # can never mask a real suite, because a repo with tests takes the
+      # other branch. {{TEST_FILE_GLOBS}} is the charter's test layout, e.g.
+      # 'tests/test_*.py'.
+      - name: Tests against the charter's floor, once any exist
+        run: |
+          if [ -n "$(git ls-files {{TEST_FILE_GLOBS}})" ]; then
+            {{TEST_COMMAND_WITH_FLOOR}}
+          else
+            echo "No test files tracked yet — bootstrap state, nothing to run."
+          fi
 
   secrets:
     runs-on: ubuntu-latest
+    # gitleaks-action reads PR commits and posts leak comments through the
+    # workflow token. Under a repo whose default token is read-only it dies
+    # with "Resource not accessible by integration" before scanning anything,
+    # so the seed states the permissions it needs instead of inheriting a
+    # repo setting it never names.
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
