@@ -33,8 +33,9 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    `seed/ISSUE_TEMPLATE/config.yml` → `.github/ISSUE_TEMPLATE/config.yml`,
    `seed/scripts/merge_dev.py` → `scripts/merge_dev.py` (align its
    `REQUIRED_CHECKS` with the workload ci.yml's job names, and keep its
-   executable bit — a copy that drops it fails lint on the seed's own
-   file),
+   executable bit — mode `100755`, so the shebang stays honest and a lint
+   config that enables EXE001 has nothing to flag; note ruff's defaults do
+   not, so nothing in a bootstrapped repo catches a dropped bit for you),
    `seed/gitignore` → `.gitignore` (extend for the stack; without it the
    first `git add -A` after a test run can commit bytecode that has secret
    fixtures folded into it).
@@ -51,13 +52,18 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    `gh repo view --json deleteBranchOnMerge`): a promotion PR's head *is*
    a long-lived branch, so the setting deletes `staging` the first time
    Steve promotes to `main`, and `merge_dev.py` already deletes unit
-   branches itself. If the edit doesn't stick, it goes in the needs-Steve
-   digest and **the repo does not promote until it is off, or the
-   `staging`/`main` ruleset exists** — protected branches are exempt.
+   branches itself. **Expect this to 403** — repo administration is
+   outside the current token (sofa-claude Issue #14), so the normal
+   outcome is a needs-Steve digest entry with the exact click path
+   (Settings → General, ~15 s), not a repaired setting. Do not write it as
+   a standing bar the repo starts out violating: the seeded CLAUDE.md
+   carries the check at the moment it bites, holding the *first promotion*
+   until the setting is off. Branch protection also exempts a branch, but
+   is unavailable on private repos at this plan — never rely on it.
    Create labels `urgent`, `keep`,
    `standing`; create the standing handoff issue **labeled `standing`**
-   (unlabeled, the repo's own expiry workflow will close it) and note its
-   number in CLAUDE.md. Vercel wiring is Steve's step — list it in the needs-Steve
+   (unlabeled, the repo's own expiry workflow will close it) and fill
+   `{{HANDOFF_ISSUE}}` in CLAUDE.md with its number. Vercel wiring is Steve's step — list it in the needs-Steve
    digest, don't wait.
 5. **Propose the first unit**: one issue, frozen acceptance criteria,
    sized to reach `dev` within a session. Product code, not process — if
@@ -74,7 +80,11 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    (`config.yml` with `blank_issues_enabled: false`), `.gitignore`, and
    `scripts/merge_dev.py` (its `REQUIRED_CHECKS` matching ci.yml's job
    names, its executable bit intact) are all present;
-   `deleteBranchOnMerge` is false, or `staging` and `main` are protected;
+   **no `{{` placeholder marker survives** in any copied file (one grep
+   over the copies — an unfilled placeholder is the seed silently ceasing
+   to be authoritative, which is the whole defect class this step exists
+   for); `deleteBranchOnMerge` is false, or the needs-Steve digest carries
+   it with the click path;
    the standing handoff issue exists, carries `standing`, and CLAUDE.md
    names its number. A failed check that one `gh` command repairs is
    re-run once, re-verified, and noted in the

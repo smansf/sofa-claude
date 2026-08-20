@@ -7,6 +7,9 @@ project's **stakes tier** ({{throwaway | standard | production}}), which sets
 review depth everywhere below. Process origin: smansf/sofa-claude (copied at
 bootstrap {{DATE}}; this repo owes it nothing).
 
+Standing handoff: Issue {{HANDOFF_ISSUE}} — `/onboard` reads it, `/wrap-up`
+refreshes it.
+
 ## Branches and deploys
 
 - `dev` — Claude's trunk. Feature branches `claude/*` PR into `dev`. Claude
@@ -31,6 +34,14 @@ bootstrap {{DATE}}; this repo owes it nothing).
   findings and a record comment, the review is treated as not yet
   run. {{VERCEL_PREVIEW}}
 - `main` — production. Steve promotes `staging → main`. {{VERCEL_PROD}}
+- **Before preparing the first promotion PR**, confirm `gh repo view --json
+  deleteBranchOnMerge` reports `false`. A promotion PR's head *is* a
+  long-lived branch, so with the setting on, merging `staging → main`
+  deletes `staging`. If it reports `true` the promotion waits: it is a
+  needs-Steve item (Settings → General, ~15 s), and `scripts/merge_dev.py`
+  already deletes unit branches itself, so nothing here needs the setting.
+  Protected `staging`/`main` are exempt, but branch protection is not
+  available on private repos at this plan — do not rely on it.
 - Deploy wiring lives in Steve's Vercel account; Claude holds no Vercel
   credentials. Claude never merges to `staging` or `main`.
 - Promote often: a `dev` far ahead of `staging` makes promotion scary

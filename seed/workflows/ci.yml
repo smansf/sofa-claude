@@ -23,18 +23,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # The bootstrap PR ships zero tests by design, and some runners exit
-      # non-zero when none are collected (Python >=3.12's unittest does).
-      # The guard is self-limiting: it stops applying the moment unit 1 lands
-      # its first test file, so nobody has to remember to remove it — and it
-      # can never mask a real suite, because a repo with tests takes the
-      # other branch. {{TEST_FILE_GLOBS}} is the charter's test layout, e.g.
-      # 'tests/test_*.py'.
+      # non-zero when none are collected (Python >=3.12's unittest exits 5).
+      # The probe is deliberately layout-independent and carries NO
+      # placeholder: it matches any tracked path containing "test" or
+      # "spec", so renaming the suffix, moving suites next to sources, or
+      # nesting a corpus can never route a repo that HAS tests into the
+      # skip branch — and an unfilled placeholder can never make this
+      # branch pass silently. It fails closed: the only way to skip is to
+      # have nothing test-shaped tracked at all, which is true exactly
+      # once, at bootstrap. Adapt the probe only if the stack genuinely
+      # names tests something else, and keep it broader than the charter's
+      # own layout.
       - name: Tests against the charter's floor, once any exist
         run: |
-          if [ -n "$(git ls-files {{TEST_FILE_GLOBS}})" ]; then
+          if [ -n "$(git ls-files '*test*' '*spec*')" ]; then
             {{TEST_COMMAND_WITH_FLOOR}}
           else
-            echo "No test files tracked yet — bootstrap state, nothing to run."
+            echo "Nothing test-shaped is tracked yet — bootstrap state."
           fi
 
   secrets:
