@@ -53,3 +53,51 @@ preconditions: this grant is **dormant until its rails exist as merged code**.
 - The Claude Code auto-updater is enabled on this account.
 - The "stop and hand back to Steve" rule applies to installing *new* tools
   only, not to updating tools already granted user-locally.
+
+## Grant 4 — App credentials
+
+Supersedes the fine-grained PAT as the process's GitHub credential. Takes
+effect on merge; `~/.claude/CLAUDE.md`'s credential rule is then updated to
+match, and this file remains authoritative.
+
+- The GitHub surface is a GitHub App (`sofa-claude-ops`), not a personal
+  access token. Its private key lives outside any repository, mode 600,
+  and is never read, printed, copied, or transmitted — presence checks
+  only. Registering the App, generating its key, and installing it on an
+  account remain Steve's ceremonies, forbidden to Claude like every other
+  credential-granting flow.
+- **Least privilege is the only mint path.** Every token names the
+  repositories it touches and the permissions it needs, and carries
+  nothing else. `seed/scripts/gh_token.py` is the single sanctioned way to
+  obtain one; it refuses to mint without both. There is no unscoped path,
+  by construction rather than by convention.
+- **Elevation is deliberate, bounded, and announced.** `administration`
+  and `organization_administration` are requested only by bootstrap's two
+  call sites — repo creation, and setting a default branch or applying a
+  ruleset — never by ongoing work. Requesting either requires a stated
+  reason, echoed to stderr so a transcript shows every elevation.
+- **No standing token.** Tokens are minted per operation, expire within
+  the hour, and are passed to a single child process. None is written to
+  disk, exported into a shell, or left in `GH_TOKEN` between commands.
+- **Deletion has no call site.** GitHub bundles repository deletion into
+  `administration` and does not let us split it off, so an admin-bearing
+  token can delete the repositories in its scope. That reach is bounded by
+  scoping: wiring tokens name the single repo being wired, and creation
+  tokens — which cannot be scoped to nothing, as an empty list silently
+  means all — name the throwaway scratch repo. A real workload repo is
+  never inside an admin-bearing token's scope once its bootstrap ends.
+- **The widening is recorded, not glossed.** Steve granted the App
+  organization-level Administration on `warblersafety` (2026-08-20),
+  moving its ceiling from per-repo to org-wide: within that org the App
+  can in principle delete repositories and change membership. Nothing in
+  the process invokes either, and scoped minting is the compensating
+  control that keeps the working credential far below that ceiling. The
+  ceiling is real and this grant names it rather than relying on it going
+  unnoticed.
+- Grant 1 is unchanged and still dormant: nothing here creates a daemon,
+  timer, or self-refreshing process. Token minting happens on demand
+  inside active work. Tokens minted inside GitHub Actions come from
+  `actions/create-github-app-token` and repo secrets, authorized by
+  Steve's merge of the workflow file, per Grant 1.
+- Revoking works in reverse: Steve uninstalls the App or reverts this
+  grant on `main`.
