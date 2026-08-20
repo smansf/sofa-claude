@@ -15,4 +15,6 @@ build/
 .coverage
 htmlcov/
 .env
+.env.*
+!.env.example
 .DS_Store

@@ -22,25 +22,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      # The bootstrap PR ships zero tests by design, and some runners exit
-      # non-zero when none are collected (Python >=3.12's unittest exits 5).
-      # The probe is deliberately layout-independent and carries NO
-      # placeholder: it matches any tracked path containing "test" or
-      # "spec", so renaming the suffix, moving suites next to sources, or
-      # nesting a corpus can never route a repo that HAS tests into the
-      # skip branch — and an unfilled placeholder can never make this
-      # branch pass silently. It fails closed: the only way to skip is to
-      # have nothing test-shaped tracked at all, which is true exactly
-      # once, at bootstrap. Adapt the probe only if the stack genuinely
-      # names tests something else, and keep it broader than the charter's
-      # own layout.
-      - name: Tests against the charter's floor, once any exist
+      # No zero-test escape hatch, deliberately. Runners that exit
+      # non-zero when nothing is collected (Python >=3.12's unittest exits
+      # 5) are doing the right thing: a test job that ran no tests is not
+      # a passing test job. The bootstrap PR therefore ships at least one
+      # real test — see the bootstrap skill — rather than CI carrying a
+      # branch that reports SUCCESS having run nothing. A block scalar, so
+      # a multi-line fill (install, then a coverage-gated run) works.
+      - name: Tests against the charter's floor
         run: |
-          if [ -n "$(git ls-files '*test*' '*spec*')" ]; then
-            {{TEST_COMMAND_WITH_FLOOR}}
-          else
-            echo "Nothing test-shaped is tracked yet — bootstrap state."
-          fi
+          {{TEST_COMMAND_WITH_FLOOR}}
 
   secrets:
     runs-on: ubuntu-latest

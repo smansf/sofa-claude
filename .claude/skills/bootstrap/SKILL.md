@@ -41,6 +41,15 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    fixtures folded into it).
    Fill every `{{PLACEHOLDER}}` from the charter and design record. The
    copy is a divorce: this repo owes sofa-claude nothing after.
+   **The bootstrap PR ships at least one real test**, because `ci.yml`
+   has no zero-test escape hatch: most runners exit non-zero when nothing
+   is collected, and that is correct — a `test` job that ran no tests is
+   not a passing `test` job, and a CI branch that reports SUCCESS having
+   run nothing is the legacy failure (0005) rebuilt inside the test gate.
+   The default that always works: a test asserting `docs/charter.md`
+   states an end condition and the test floor, which is a real invariant
+   that really breaks. Fill `{{TEST_COMMAND_WITH_FLOOR}}` so it exercises
+   it.
 4. **Wire the repo**: create `dev` and `staging` from `main`; **set `dev`
    as the default branch, then verify it stuck** (`gh repo view --json
    defaultBranchRef` must say `dev` — if it doesn't, stop wiring and put
@@ -63,8 +72,8 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    Create labels `urgent`, `keep`,
    `standing`; create the standing handoff issue **labeled `standing`**
    (unlabeled, the repo's own expiry workflow will close it) and fill
-   `{{HANDOFF_ISSUE}}` in CLAUDE.md with its number. Vercel wiring is Steve's step — list it in the needs-Steve
-   digest, don't wait.
+   `{{HANDOFF_ISSUE}}` in CLAUDE.md with its number. Vercel wiring is
+   Steve's step — list it in the needs-Steve digest, don't wait.
 5. **Propose the first unit**: one issue, frozen acceptance criteria,
    sized to reach `dev` within a session. Product code, not process — if
    the process pinches during the unit, that's a sofa-claude bleed to
@@ -80,11 +89,14 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    (`config.yml` with `blank_issues_enabled: false`), `.gitignore`, and
    `scripts/merge_dev.py` (its `REQUIRED_CHECKS` matching ci.yml's job
    names, its executable bit intact) are all present;
-   **no `{{` placeholder marker survives** in any copied file (one grep
-   over the copies — an unfilled placeholder is the seed silently ceasing
-   to be authoritative, which is the whole defect class this step exists
-   for); `deleteBranchOnMerge` is false, or the needs-Steve digest carries
-   it with the click path;
+   **no seed placeholder survives** in any copied file — grep for
+   `{{[A-Z_]\+}}`, the seed's own placeholder shape, **not** a bare `{{`,
+   which would match the workflows' legitimate `${{ secrets.GITHUB_TOKEN }}`
+   and fail on every bootstrap forever; an unfilled placeholder is the seed
+   silently ceasing to be authoritative, which is the defect class this
+   step exists for. The `test` job ran a real command and the repo tracks
+   at least one test file. `deleteBranchOnMerge` is false, or the
+   needs-Steve digest carries it with the click path;
    the standing handoff issue exists, carries `standing`, and CLAUDE.md
    names its number. A failed check that one `gh` command repairs is
    re-run once, re-verified, and noted in the
