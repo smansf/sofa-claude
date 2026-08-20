@@ -19,7 +19,17 @@ bootstrap {{DATE}}; this repo owes it nothing).
   every PR at the first push, draft while review and fixes are in
   progress; ready means merging is the only step left.
 - `staging` — human-facing preview. Steve promotes `dev → staging` via a
-  promotion PR that Claude prepares with a plain summary. {{VERCEL_PREVIEW}}
+  promotion PR that Claude prepares with a plain summary. Promotion PRs
+  **open as draft** (`gh pr create --draft` — opening one ready is a
+  defect, not a shortcut). Steve flips ready and merges after spending
+  whatever review depth he chooses; Claude never flips a promotion PR
+  to ready, so for promotion PRs the ready flip is itself the record
+  that Steve decided — review run or skipped. When his review lane
+  returns zero findings, the session that observed the run records that
+  outcome as a PR comment quoting the tool's summary — an observed
+  result, never an invocation or replication of his lane; absent both
+  findings and a record comment, the review is treated as not yet
+  run. {{VERCEL_PREVIEW}}
 - `main` — production. Steve promotes `staging → main`. {{VERCEL_PROD}}
 - Deploy wiring lives in Steve's Vercel account; Claude holds no Vercel
   credentials. Claude never merges to `staging` or `main`.
@@ -46,7 +56,7 @@ bootstrap {{DATE}}; this repo owes it nothing).
   toolbox); at production stakes Steve re-approves via PR review.
   Promotion PRs hand Steve the paste-ready
   `/code-review <effort> <PR URL> --comment` command and confirm its
-  findings actually landed on the PR.
+  findings — or the zero-finding record — actually landed on the PR.
 
 ## Never
 
