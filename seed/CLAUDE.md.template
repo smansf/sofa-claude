@@ -19,7 +19,12 @@ bootstrap {{DATE}}; this repo owes it nothing).
   every PR at the first push, draft while review and fixes are in
   progress; ready means merging is the only step left.
 - `staging` — human-facing preview. Steve promotes `dev → staging` via a
-  promotion PR that Claude prepares with a plain summary. {{VERCEL_PREVIEW}}
+  promotion PR that Claude prepares with a plain summary. Promotion PRs
+  **open as draft**; Steve flips ready (or merges directly) after
+  spending whatever review depth he chooses — ready means Steve has
+  decided, in every lane. A zero-finding run of his review lane is
+  recorded as a PR comment, so a clean review leaves the same durable
+  trace a finding would. {{VERCEL_PREVIEW}}
 - `main` — production. Steve promotes `staging → main`. {{VERCEL_PROD}}
 - Deploy wiring lives in Steve's Vercel account; Claude holds no Vercel
   credentials. Claude never merges to `staging` or `main`.
