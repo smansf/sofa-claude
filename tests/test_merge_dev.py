@@ -409,6 +409,33 @@ class RollupFetchTests(unittest.TestCase):
         printed = " ".join(str(c.args[0]) for c in fake_print.call_args_list)
         self.assertIn("TRANSPORT FAILURE", printed)
 
+    def test_malformed_rollup_body_is_a_transport_failure_not_a_refusal(self):
+        """A 200 that isn't the expected shape (or isn't JSON at all)
+        must not be read as 'this commit has zero checks' — that would
+        misreport a data-fetching problem as a real, and wrong, refusal."""
+        pr_json = _pr_view_json(comments=[{"body": REVIEW}])
+
+        def fake_gh(args, env):
+            if args[:2] == ["pr", "view"]:
+                return pr_json
+            if args[0] == "api" and args[1].endswith("/check-runs"):
+                return "not json at all"
+            if args[0] == "api" and args[1].endswith("/status"):
+                return json.dumps({"unexpected_key": []})
+            raise AssertionError(f"unexpected gh call: {args}")
+
+        module = mock.Mock(mint=mock.Mock(return_value=("ghs_stub", "later")))
+        with mock.patch.object(merge_dev, "_origin", return_value=("o", "r")), \
+             mock.patch.object(merge_dev, "_gh_token_module",
+                               return_value=module), \
+             mock.patch.object(merge_dev, "_gh", side_effect=fake_gh), \
+             mock.patch("builtins.print") as fake_print:
+            code = merge_dev.main(["merge_dev.py", "12"])
+        self.assertEqual(code, 3)
+        printed = " ".join(str(c.args[0]) for c in fake_print.call_args_list)
+        self.assertIn("TRANSPORT FAILURE", printed)
+        self.assertNotIn("REFUSED", printed)
+
 
 class PostMergeCleanupTests(unittest.TestCase):
     """A landed merge must never report as a failed one (Issue #29):
@@ -549,10 +576,21 @@ class CredentialTests(unittest.TestCase):
             return "ghs_stub", "later"
 
         module = mock.Mock(mint=fake_mint)
-        blocked = _pr_view_json(isDraft=True, comments=[])
+        pr_json = _pr_view_json(isDraft=True, comments=[])
+        runs_json, status_json = _rest_rollup_jsons([])
+
+        def fake_gh(args, env):
+            if args[:2] == ["pr", "view"]:
+                return pr_json
+            if args[0] == "api" and args[1].endswith("/check-runs"):
+                return runs_json
+            if args[0] == "api" and args[1].endswith("/status"):
+                return status_json
+            raise AssertionError(f"unexpected gh call: {args}")
+
         with mock.patch.object(merge_dev, "_origin", return_value=("o", "r")), \
              mock.patch.object(merge_dev, "_gh_token_module", return_value=module), \
-             mock.patch.object(merge_dev, "_gh", return_value=blocked), \
+             mock.patch.object(merge_dev, "_gh", side_effect=fake_gh), \
              mock.patch("builtins.print"):
             self.assertEqual(merge_dev.main(["merge_dev.py", "12"]), 1)
         self.assertEqual(len(minted), 1, "a refused PR must mint once, to read")

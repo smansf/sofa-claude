@@ -295,18 +295,28 @@ def _fetch_rollup(owner, repo, sha, env):
         ["api", f"repos/{owner}/{repo}/commits/{sha}/check-runs"], env))
     combined = json.loads(_gh(
         ["api", f"repos/{owner}/{repo}/commits/{sha}/status"], env))
+    # A 2xx response is not proof of the expected shape: raising here on
+    # a missing key sends a malformed/unexpected body through the same
+    # transport-failure path as a thrown gh error, rather than silently
+    # reading it as "this commit has zero checks" (main()'s caller
+    # widens its except clause to catch this alongside CalledProcessError).
+    if "check_runs" not in runs or "statuses" not in combined:
+        raise ValueError(
+            "check-runs/status response is missing its expected key — "
+            "not the shape these endpoints document, so the rollup "
+            "cannot be trusted for a merge decision.")
     nodes = [{"__typename": "CheckRun", "name": c.get("name"),
              "conclusion": c.get("conclusion"), "status": c.get("status")}
-            for c in runs.get("check_runs") or []]
+            for c in runs["check_runs"]]
     nodes += [{"__typename": "StatusContext", "context": s.get("context"),
               "state": s.get("state")}
-             for s in combined.get("statuses") or []]
+             for s in combined["statuses"]]
     return nodes
 
 
 def _transport_failure(err):
     print("TRANSPORT FAILURE — nothing was merged.")
-    detail = (getattr(err, "stderr", "") or "").strip()
+    detail = (getattr(err, "stderr", "") or str(err)).strip()
     if detail:
         print(detail)
     print("Do NOT merge by hand as a workaround — fix the cause or put "
@@ -364,7 +374,11 @@ def main(argv):
     try:
         pr["statusCheckRollup"] = _fetch_rollup(owner, repo,
                                                 pr["headRefOid"], env)
-    except subprocess.CalledProcessError as err:
+    except (subprocess.CalledProcessError, ValueError) as err:
+        # ValueError covers json.loads on a malformed 2xx body and the
+        # shape check inside _fetch_rollup — both are "the data can't be
+        # trusted", same as a thrown gh error, never a silent empty
+        # rollup that would misread as "this commit has zero checks."
         return _transport_failure(err)
     bodies = [c.get("body", "") for c in pr.get("comments") or []]
     blockers, pending = evaluate(pr, bodies)
