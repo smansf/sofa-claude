@@ -245,8 +245,22 @@ def mint(account, repositories, permissions, reason=None, app_id=None,
         raise TokenError("SOFA_APP_ID is not set; it is the App's numeric ID.")
     key_path = key_path or os.environ.get("SOFA_APP_KEY") or DEFAULT_KEY
     if recorded:
-        entry = record_elevation(account, repositories, permissions, reason or "")
-        if elevated:
+        # Fail closed only where the control actually lives: an *elevation*
+        # must not happen unrecorded. A read-level record is forensic, and
+        # letting an unwritable log turn every routine merge into a
+        # credential failure would be a far larger outage than the gap it
+        # closes -- so that case warns loudly and proceeds.
+        try:
+            entry = record_elevation(account, repositories, permissions,
+                                     reason or "")
+        except TokenError:
+            if elevated:
+                raise
+            print("[gh_token] WARNING: could not record a read-level mint; "
+                  "proceeding. Elevated mints would refuse here.",
+                  file=sys.stderr)
+            entry = None
+        if elevated and entry:
             print(f"[gh_token] elevated ({', '.join(elevated)}) recorded: "
                   f"{entry['reason']}", file=sys.stderr)
     jwt = app_jwt(app_id, key_path)
@@ -254,8 +268,12 @@ def mint(account, repositories, permissions, reason=None, app_id=None,
                  jwt, "POST",
                  {"repositories": list(repositories), "permissions": dict(permissions)})
     if recorded:
-        record_elevation(account, repositories, permissions, reason or "",
-                         event="granted")
+        try:
+            record_elevation(account, repositories, permissions, reason or "",
+                             event="granted")
+        except TokenError:
+            if elevated:
+                raise
     return result["token"], result.get("expires_at")
 
 

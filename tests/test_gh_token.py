@@ -23,7 +23,13 @@ _spec.loader.exec_module(gh_token)
 
 
 def _mint(*args, **kwargs):
-    """Call mint() with the network stubbed; return (token, captured_body)."""
+    """Call mint() with the network stubbed; return (token, captured_body).
+
+    SOFA_AUDIT_LOG is pinned to a temporary file: the real log is Grant 4's
+    detection control, and a test suite forging entries into it is worse
+    than a normal hygiene slip. It also keeps the suite runnable where
+    $HOME is not writable.
+    """
     captured = {}
 
     def fake_api(path, bearer, method="GET", payload=None):
@@ -33,9 +39,12 @@ def _mint(*args, **kwargs):
         captured["payload"] = payload
         return {"token": "ghs_stub", "expires_at": "2026-08-21T00:00:00Z"}
 
-    with mock.patch.object(gh_token, "api", fake_api), \
-         mock.patch.object(gh_token, "app_jwt", lambda *a, **k: "jwt-stub"):
-        result = gh_token.mint(*args, app_id="1", key_path="/dev/null", **kwargs)
+    with tempfile.TemporaryDirectory() as tmp:
+        with mock.patch.dict(os.environ,
+                             {"SOFA_AUDIT_LOG": str(pathlib.Path(tmp) / "log")}), \
+             mock.patch.object(gh_token, "api", fake_api), \
+             mock.patch.object(gh_token, "app_jwt", lambda *a, **k: "jwt-stub"):
+            result = gh_token.mint(*args, app_id="1", key_path="/dev/null", **kwargs)
     return result, captured
 
 
@@ -274,6 +283,38 @@ class AuditTests(unittest.TestCase):
                 gh_token.record_elevation("o", ["r"], {"administration": "write"},
                                           "why", audit_path=str(blocker / "log"))
         self.assertIn("could not be recorded", str(caught.exception))
+
+
+class FailClosedScopeTests(unittest.TestCase):
+    """Fail closed where the control lives; do not outage routine work."""
+
+    def _mint_with_unwritable_log(self, permissions, reason=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            blocker = pathlib.Path(tmp) / "blocked"
+            blocker.write_text("not a directory")
+            with mock.patch.dict(os.environ,
+                                 {"SOFA_AUDIT_LOG": str(blocker / "log")}), \
+                 mock.patch.object(sys, "stderr", io.StringIO()) as err, \
+                 mock.patch.object(gh_token, "app_jwt", lambda *a, **k: "jwt"), \
+                 mock.patch.object(
+                     gh_token, "api",
+                     lambda path, *a, **k: (
+                         [{"id": 1, "account": {"login": "o"}}]
+                         if path.startswith("/app/installations?")
+                         else {"token": "ghs_stub", "expires_at": "later"})):
+                return gh_token.mint("o", ["r"], permissions, reason=reason,
+                                     app_id="1", key_path="/dev/null"), err.getvalue()
+
+    def test_elevated_mint_refuses_when_it_cannot_be_recorded(self):
+        with self.assertRaises(gh_token.TokenError):
+            self._mint_with_unwritable_log({"administration": "write"},
+                                           reason="wiring")
+
+    def test_read_level_mint_warns_but_proceeds(self):
+        """An unwritable log must not turn every routine merge into a failure."""
+        (token, _), stderr = self._mint_with_unwritable_log({"actions": "read"})
+        self.assertEqual(token, "ghs_stub")
+        self.assertIn("WARNING", stderr)
 
 
 class NoCredentialLeakTests(unittest.TestCase):

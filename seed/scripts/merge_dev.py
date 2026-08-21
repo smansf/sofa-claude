@@ -34,13 +34,20 @@ import sys
 # omitting it fails with "Resource not accessible by integration" rather
 # than returning a partial rollup. Read level throughout except the two
 # writes the merge itself performs.
-MERGE_PERMISSIONS = {
-    "contents": "write",       # squash-merge, delete the branch
-    "pull_requests": "write",  # perform the merge; read the comments
+# Two phases, deliberately. Reading a PR to decide whether it may merge
+# needs nothing writable, so a refused PR never has a merge-capable
+# credential in the room at all. The write token is minted only once
+# `evaluate()` has returned no blockers.
+INSPECT_PERMISSIONS = {
+    "pull_requests": "read",   # the PR, and its comments
     "checks": "read",
-    "actions": "read",
+    "actions": "read",         # statusCheckRollup resolves workflow runs
+    "contents": "read",
     "metadata": "read",
 }
+MERGE_PERMISSIONS = dict(INSPECT_PERMISSIONS,
+                         contents="write",       # squash-merge, delete branch
+                         pull_requests="write")  # perform the merge
 # NOT included: `statuses`. statusCheckRollup also returns StatusContext
 # nodes — commit statuses, which is what a Vercel preview posts — and
 # those are read under a separate Commit statuses permission the App has
@@ -151,7 +158,7 @@ def main(argv):
     try:
         owner, repo = _origin()
         gh_token = _gh_token_module()
-        token, _ = gh_token.mint(owner, [repo], MERGE_PERMISSIONS)
+        token, _ = gh_token.mint(owner, [repo], INSPECT_PERMISSIONS)
     except Exception as err:
         # Deliberately broad, and it must stay that way: exit 4 is the
         # "nothing was merged, and not because the PR was blocked" signal.
@@ -179,6 +186,16 @@ def main(argv):
         for b in blockers:
             print(f"  - {b}")
         return 1
+    try:
+        token, _ = gh_token.mint(owner, [repo], MERGE_PERMISSIONS)
+    except Exception as err:
+        print("CREDENTIAL FAILURE — nothing was merged.")
+        print(str(err))
+        print("Do NOT merge by hand as a workaround, and do not fall back to "
+              "another credential — fix the cause or put it in the "
+              "needs-Steve digest.")
+        return 4
+    env = dict(os.environ, GH_TOKEN=token, GITHUB_TOKEN=token)
     try:
         _gh(["pr", "merge", number, "--squash", "--delete-branch"], env)
     except subprocess.CalledProcessError as err:

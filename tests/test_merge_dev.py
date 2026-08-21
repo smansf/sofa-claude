@@ -1,6 +1,7 @@
 """Tests for the seed kit's paved-path merge script's decision logic."""
 
 import importlib.util
+import json
 import pathlib
 import subprocess
 import unittest
@@ -118,6 +119,30 @@ class CredentialTests(unittest.TestCase):
         for name, level in perms.items():
             self.assertIn(level, ("read", "write"))
         self.assertNotIn("administration", perms)
+
+    def test_inspect_token_cannot_merge(self):
+        """A refused PR never has a merge-capable credential in the room."""
+        for level in merge_dev.INSPECT_PERMISSIONS.values():
+            self.assertEqual(level, "read")
+        self.assertEqual(merge_dev.MERGE_PERMISSIONS["contents"], "write")
+        self.assertEqual(merge_dev.MERGE_PERMISSIONS["pull_requests"], "write")
+
+    def test_refused_pr_never_mints_write_permissions(self):
+        minted = []
+
+        def fake_mint(account, repositories, permissions, **kwargs):
+            minted.append(dict(permissions))
+            return "ghs_stub", "later"
+
+        module = mock.Mock(mint=fake_mint)
+        blocked = json.dumps(pr(isDraft=True))
+        with mock.patch.object(merge_dev, "_origin", return_value=("o", "r")), \
+             mock.patch.object(merge_dev, "_gh_token_module", return_value=module), \
+             mock.patch.object(merge_dev, "_gh", return_value=blocked), \
+             mock.patch("builtins.print"):
+            self.assertEqual(merge_dev.main(["merge_dev.py", "12"]), 1)
+        self.assertEqual(len(minted), 1, "a refused PR must mint once, to read")
+        self.assertNotIn("write", minted[0].values())
 
     def test_scoped_to_this_repository_only(self):
         seen = {}
