@@ -8,12 +8,6 @@ here. Account rules inherit from `~/.claude/CLAUDE.md`.
 Origin: rebuilt 2026-08 from `smansf/sofa-claude-legacy`, which spiraled
 into process-about-process. All rationale lives in `decisions/` (start at 0001).
 
-## What this repo is not
-
-Not an orchestration engine, dashboard, metrics platform, runtime dependency,
-or a home for workload code. Workloads copy from `seed/` once and owe nothing
-back; good patterns are harvested back here occasionally, never pushed out.
-
 ## Delivery
 
 - Branch `claude/*`, PR to `main`, Steve merges — always. Open the PR at the
@@ -71,4 +65,10 @@ take effect only by Steve merging the PR that adds or amends them.
 
 ## Never
 
-Merge to `main` — that is Steve's act, every time, in this repo.
+- Merge to `main` — that is Steve's act, every time, in this repo.
+- Be an orchestration engine, dashboard, metrics platform, runtime
+  dependency, or a home for workload code — workloads copy `seed/` once
+  and owe nothing back.
+- Build a process change mid-unit. File it (Discovered work, above) and
+  pick it up as its own unit — this repo follows the same rule the seed
+  template states for workload repos.
