@@ -23,7 +23,13 @@ _spec.loader.exec_module(gh_token)
 
 
 def _mint(*args, **kwargs):
-    """Call mint() with the network stubbed; return (token, captured_body)."""
+    """Call mint() with the network stubbed; return (token, captured_body).
+
+    SOFA_AUDIT_LOG is pinned to a temporary file: the real log is Grant 4's
+    detection control, and a test suite forging entries into it is worse
+    than a normal hygiene slip. It also keeps the suite runnable where
+    $HOME is not writable.
+    """
     captured = {}
 
     def fake_api(path, bearer, method="GET", payload=None):
@@ -33,9 +39,12 @@ def _mint(*args, **kwargs):
         captured["payload"] = payload
         return {"token": "ghs_stub", "expires_at": "2026-08-21T00:00:00Z"}
 
-    with mock.patch.object(gh_token, "api", fake_api), \
-         mock.patch.object(gh_token, "app_jwt", lambda *a, **k: "jwt-stub"):
-        result = gh_token.mint(*args, app_id="1", key_path="/dev/null", **kwargs)
+    with tempfile.TemporaryDirectory() as tmp:
+        with mock.patch.dict(os.environ,
+                             {"SOFA_AUDIT_LOG": str(pathlib.Path(tmp) / "log")}), \
+             mock.patch.object(gh_token, "api", fake_api), \
+             mock.patch.object(gh_token, "app_jwt", lambda *a, **k: "jwt-stub"):
+            result = gh_token.mint(*args, app_id="1", key_path="/dev/null", **kwargs)
     return result, captured
 
 
@@ -76,6 +85,34 @@ class ScopingTests(unittest.TestCase):
 
 
 class ElevationTests(unittest.TestCase):
+    def test_read_level_needs_no_reason(self):
+        """`actions=read` is what an ordinary CI check needs."""
+        self.assertEqual(gh_token.elevated_permissions({"actions": "read"}), [])
+        self.assertEqual(gh_token.elevated_permissions({"administration": "read"}), [])
+        (token, _), _ = _mint("warblersafety", ["scratch"],
+                              {"actions": "read", "checks": "read"})
+        self.assertEqual(token, "ghs_stub")
+
+    def test_read_level_is_still_recorded(self):
+        """Narrowing the audit trail would narrow the detection control."""
+        self.assertEqual(gh_token.recorded_permissions({"actions": "read"}),
+                         ["actions"])
+        self.assertEqual(gh_token.recorded_permissions({"contents": "write"}), [])
+
+    def test_unknown_level_counts_as_a_write(self):
+        """Deny-by-default: only the exact string `read` is not elevation."""
+        for level in ("write", "admin", True, "WRITE", "true", "", None, "rw"):
+            with self.subTest(level=level):
+                self.assertEqual(
+                    gh_token.elevated_permissions({"administration": level}),
+                    ["administration"])
+
+    def test_read_is_matched_case_and_space_insensitively(self):
+        for level in ("read", "READ", " read "):
+            with self.subTest(level=level):
+                self.assertEqual(
+                    gh_token.elevated_permissions({"actions": level}), [])
+
     def test_elevated_permission_requires_a_reason(self):
         repo_level = [p for p in gh_token.ELEVATED if p not in gh_token.ORG_LEVEL]
         self.assertTrue(repo_level, "the repo-level elevated set must not be empty")
@@ -101,6 +138,29 @@ class ElevationTests(unittest.TestCase):
         self.assertIn("apply protect-main ruleset", stderr.getvalue())
         self.assertNotIn(token, stderr.getvalue(),
                          "the announcement must never carry the credential")
+
+
+class TransportTests(unittest.TestCase):
+    """Network failures must surface as TokenError, never as a traceback."""
+
+    def test_unreachable_github_becomes_a_token_error(self):
+        import urllib.error
+        with mock.patch.object(gh_token.urllib.request, "urlopen",
+                               side_effect=urllib.error.URLError("offline")):
+            with self.assertRaises(gh_token.TokenError) as caught:
+                gh_token.api("/app", "jwt-stub")
+        self.assertIn("Cannot reach GitHub", str(caught.exception))
+
+    def test_unparseable_response_becomes_a_token_error(self):
+        class FakeResponse:
+            def read(self): return b"<html>not json</html>"
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+        with mock.patch.object(gh_token.urllib.request, "urlopen",
+                               return_value=FakeResponse()):
+            with self.assertRaises(gh_token.TokenError) as caught:
+                gh_token.api("/app", "jwt-stub")
+        self.assertIn("Unparseable response", str(caught.exception))
 
 
 class ConfigurationTests(unittest.TestCase):
@@ -223,6 +283,38 @@ class AuditTests(unittest.TestCase):
                 gh_token.record_elevation("o", ["r"], {"administration": "write"},
                                           "why", audit_path=str(blocker / "log"))
         self.assertIn("could not be recorded", str(caught.exception))
+
+
+class FailClosedScopeTests(unittest.TestCase):
+    """Fail closed where the control lives; do not outage routine work."""
+
+    def _mint_with_unwritable_log(self, permissions, reason=None):
+        with tempfile.TemporaryDirectory() as tmp:
+            blocker = pathlib.Path(tmp) / "blocked"
+            blocker.write_text("not a directory")
+            with mock.patch.dict(os.environ,
+                                 {"SOFA_AUDIT_LOG": str(blocker / "log")}), \
+                 mock.patch.object(sys, "stderr", io.StringIO()) as err, \
+                 mock.patch.object(gh_token, "app_jwt", lambda *a, **k: "jwt"), \
+                 mock.patch.object(
+                     gh_token, "api",
+                     lambda path, *a, **k: (
+                         [{"id": 1, "account": {"login": "o"}}]
+                         if path.startswith("/app/installations?")
+                         else {"token": "ghs_stub", "expires_at": "later"})):
+                return gh_token.mint("o", ["r"], permissions, reason=reason,
+                                     app_id="1", key_path="/dev/null"), err.getvalue()
+
+    def test_elevated_mint_refuses_when_it_cannot_be_recorded(self):
+        with self.assertRaises(gh_token.TokenError):
+            self._mint_with_unwritable_log({"administration": "write"},
+                                           reason="wiring")
+
+    def test_read_level_mint_warns_but_proceeds(self):
+        """An unwritable log must not turn every routine merge into a failure."""
+        (token, _), stderr = self._mint_with_unwritable_log({"actions": "read"})
+        self.assertEqual(token, "ghs_stub")
+        self.assertIn("WARNING", stderr)
 
 
 class NoCredentialLeakTests(unittest.TestCase):

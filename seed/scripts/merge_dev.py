@@ -10,12 +10,78 @@ why merging any other way is declared a defect in CLAUDE.md.
 On transport failure it says so and stops: do NOT merge by hand as a
 workaround — fix the cause or put it in the needs-Steve digest.
 
+Credentials come from the App via scripts/gh_token.py, scoped to this
+repository and to the permissions a merge actually needs. If minting
+fails, this script stops at exit 4 without calling `gh` at all — it does
+not retry under whatever credential the environment happens to carry,
+because a silent fallback is how a broad standing token survives a
+migration meant to remove it (governance/grants.md, Grant 4). It cannot
+scrub the environment it runs in; what it guarantees is its own conduct.
+
 Usage: python3 scripts/merge_dev.py <PR-number>
 """
 
+import importlib.util
 import json
+import os
+import pathlib
+import re
 import subprocess
 import sys
+
+# `gh pr view --json statusCheckRollup` resolves each check's workflow
+# run, which needs actions:read — verified against a private repo, where
+# omitting it fails with "Resource not accessible by integration" rather
+# than returning a partial rollup. Read level throughout except the two
+# writes the merge itself performs.
+# Two phases, deliberately. Reading a PR to decide whether it may merge
+# needs nothing writable, so a refused PR never has a merge-capable
+# credential in the room at all. The write token is minted only once
+# `evaluate()` has returned no blockers.
+INSPECT_PERMISSIONS = {
+    "pull_requests": "read",   # the PR, and its comments
+    "checks": "read",
+    "actions": "read",         # statusCheckRollup resolves workflow runs
+    "contents": "read",
+    "metadata": "read",
+}
+MERGE_PERMISSIONS = dict(INSPECT_PERMISSIONS,
+                         contents="write",       # squash-merge, delete branch
+                         pull_requests="write")  # perform the merge
+# NOT included: `statuses`. statusCheckRollup also returns StatusContext
+# nodes — commit statuses, which is what a Vercel preview posts — and
+# those are read under a separate Commit statuses permission the App has
+# not been granted (requesting it 422s the whole mint). Until it is
+# granted, a repo whose CI posts commit statuses may see them missing
+# from the rollup, and a missing check is not evaluated as a blocker.
+# Tracked in sofa-claude Issue #26; REQUIRED_CHECKS still catches an
+# absent required check, which is the case that matters most.
+
+
+def _gh_token_module():
+    path = pathlib.Path(__file__).resolve().parent / "gh_token.py"
+    if not path.exists():
+        raise RuntimeError(
+            f"{path} is missing. It is the only sanctioned credential path; "
+            f"bootstrap copies it alongside this script.")
+    spec = importlib.util.spec_from_file_location("gh_token", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def repo_slug(remote_url):
+    """(owner, repo) from a git remote URL, SSH or HTTPS."""
+    match = re.search(r"[:/]([^/:]+)/([^/]+?)(?:\.git)?/?$", remote_url.strip())
+    if not match:
+        raise RuntimeError(f"Cannot parse an owner/repo out of {remote_url!r}.")
+    return match.group(1), match.group(2)
+
+
+def _origin():
+    url = subprocess.run(["git", "remote", "get-url", "origin"],
+                         check=True, capture_output=True, text=True).stdout
+    return repo_slug(url)
 
 REVIEW_MARKER = "## Reviewer pass"
 # Bootstrap aligns these with the workload ci.yml's actual job names.
@@ -69,9 +135,9 @@ def evaluate(pr, comment_bodies):
     return blockers
 
 
-def _gh(args):
+def _gh(args, env):
     return subprocess.run(["gh"] + args, check=True, capture_output=True,
-                          text=True).stdout
+                          text=True, env=env).stdout
 
 
 def _transport_failure(err):
@@ -90,9 +156,27 @@ def main(argv):
         return 2
     number = argv[1]
     try:
+        owner, repo = _origin()
+        gh_token = _gh_token_module()
+        token, _ = gh_token.mint(owner, [repo], INSPECT_PERMISSIONS)
+    except Exception as err:
+        # Deliberately broad, and it must stay that way: exit 4 is the
+        # "nothing was merged, and not because the PR was blocked" signal.
+        # A traceback escaping here would exit 1 — the same status as a
+        # legitimate refusal — so an unattended run could not tell a
+        # network blip from a blocked PR, and none of the text below
+        # would print.
+        print("CREDENTIAL FAILURE — nothing was merged.")
+        print(str(err))
+        print("Do NOT merge by hand as a workaround, and do not fall back to "
+              "another credential — fix the cause or put it in the "
+              "needs-Steve digest.")
+        return 4
+    env = dict(os.environ, GH_TOKEN=token, GITHUB_TOKEN=token)
+    try:
         fields = ("isDraft,state,baseRefName,headRefName,"
                   "statusCheckRollup,comments")
-        pr = json.loads(_gh(["pr", "view", number, "--json", fields]))
+        pr = json.loads(_gh(["pr", "view", number, "--json", fields], env))
     except subprocess.CalledProcessError as err:
         return _transport_failure(err)
     bodies = [c.get("body", "") for c in pr.get("comments") or []]
@@ -103,7 +187,17 @@ def main(argv):
             print(f"  - {b}")
         return 1
     try:
-        _gh(["pr", "merge", number, "--squash", "--delete-branch"])
+        token, _ = gh_token.mint(owner, [repo], MERGE_PERMISSIONS)
+    except Exception as err:
+        print("CREDENTIAL FAILURE — nothing was merged.")
+        print(str(err))
+        print("Do NOT merge by hand as a workaround, and do not fall back to "
+              "another credential — fix the cause or put it in the "
+              "needs-Steve digest.")
+        return 4
+    env = dict(os.environ, GH_TOKEN=token, GITHUB_TOKEN=token)
+    try:
+        _gh(["pr", "merge", number, "--squash", "--delete-branch"], env)
     except subprocess.CalledProcessError as err:
         return _transport_failure(err)
     print(f"Merged PR #{number} to dev (squash) and deleted its branch.")
