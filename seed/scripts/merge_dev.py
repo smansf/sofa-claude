@@ -40,7 +40,8 @@ import sys
 # `evaluate()` has returned no blockers.
 INSPECT_PERMISSIONS = {
     "pull_requests": "read",   # the PR, and its comments
-    "checks": "read",
+    "checks": "read",          # CheckRun nodes in the rollup
+    "statuses": "read",        # StatusContext nodes — see below
     "actions": "read",         # statusCheckRollup resolves workflow runs
     "contents": "read",
     "metadata": "read",
@@ -48,14 +49,15 @@ INSPECT_PERMISSIONS = {
 MERGE_PERMISSIONS = dict(INSPECT_PERMISSIONS,
                          contents="write",       # squash-merge, delete branch
                          pull_requests="write")  # perform the merge
-# NOT included: `statuses`. statusCheckRollup also returns StatusContext
-# nodes — commit statuses, which is what a Vercel preview posts — and
-# those are read under a separate Commit statuses permission the App has
-# not been granted (requesting it 422s the whole mint). Until it is
-# granted, a repo whose CI posts commit statuses may see them missing
-# from the rollup, and a missing check is not evaluated as a blocker.
-# Tracked in sofa-claude Issue #26; REQUIRED_CHECKS still catches an
-# absent required check, which is the case that matters most.
+# `statusCheckRollup` returns two node shapes and each needs its own
+# permission: CheckRun (`checks`) and StatusContext (`statuses`) — the
+# latter is what a deployment preview posts. `evaluate()` reads both, via
+# `name or context` and `conclusion or state`. Omitting `statuses` does
+# not fail loudly: the rollup comes back without those nodes, and a check
+# that never reaches `evaluate()` cannot block, so a failing preview would
+# silently stop being a blocker. Every permission the rollup query needs
+# is therefore listed here, not just the one node type that was tested
+# first (sofa-claude Issue #26).
 
 
 def _gh_token_module():
