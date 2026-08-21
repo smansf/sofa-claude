@@ -11,10 +11,12 @@ On transport failure it says so and stops: do NOT merge by hand as a
 workaround — fix the cause or put it in the needs-Steve digest.
 
 Credentials come from the App via scripts/gh_token.py, scoped to this
-repository and to the permissions a merge actually needs. If the App is
-not configured the script stops: it never falls back to ambient auth,
+repository and to the permissions a merge actually needs. If minting
+fails, this script stops at exit 4 without calling `gh` at all — it does
+not retry under whatever credential the environment happens to carry,
 because a silent fallback is how a broad standing token survives a
-migration meant to remove it (governance/grants.md, Grant 4).
+migration meant to remove it (governance/grants.md, Grant 4). It cannot
+scrub the environment it runs in; what it guarantees is its own conduct.
 
 Usage: python3 scripts/merge_dev.py <PR-number>
 """
@@ -39,6 +41,14 @@ MERGE_PERMISSIONS = {
     "actions": "read",
     "metadata": "read",
 }
+# NOT included: `statuses`. statusCheckRollup also returns StatusContext
+# nodes — commit statuses, which is what a Vercel preview posts — and
+# those are read under a separate Commit statuses permission the App has
+# not been granted (requesting it 422s the whole mint). Until it is
+# granted, a repo whose CI posts commit statuses may see them missing
+# from the rollup, and a missing check is not evaluated as a blocker.
+# Tracked in sofa-claude Issue #26; REQUIRED_CHECKS still catches an
+# absent required check, which is the case that matters most.
 
 
 def _gh_token_module():
@@ -142,9 +152,13 @@ def main(argv):
         owner, repo = _origin()
         gh_token = _gh_token_module()
         token, _ = gh_token.mint(owner, [repo], MERGE_PERMISSIONS)
-    except (RuntimeError, subprocess.CalledProcessError) as err:
-        # gh_token.TokenError subclasses RuntimeError, so this covers a
-        # missing key, an uninstalled App, and an unparseable remote alike.
+    except Exception as err:
+        # Deliberately broad, and it must stay that way: exit 4 is the
+        # "nothing was merged, and not because the PR was blocked" signal.
+        # A traceback escaping here would exit 1 — the same status as a
+        # legitimate refusal — so an unattended run could not tell a
+        # network blip from a blocked PR, and none of the text below
+        # would print.
         print("CREDENTIAL FAILURE — nothing was merged.")
         print(str(err))
         print("Do NOT merge by hand as a workaround, and do not fall back to "

@@ -94,7 +94,18 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    `backlog-expiry.yml`, `pull_request_template.md`, both issue templates
    (`config.yml` with `blank_issues_enabled: false`), `.gitignore`, and
    `scripts/merge_dev.py` (its `REQUIRED_CHECKS` matching ci.yml's job
-   names, its executable bit intact) are all present;
+   names, its executable bit intact) and `scripts/gh_token.py` are all
+   present; **the credential path actually works** — mint a read-only
+   token for this repo and run one `gh` call under it, because the file
+   being present proves nothing about the repo being inside the App's
+   installation. A personal-account installation is scoped to selected
+   repositories and a new repo is **not** added automatically; adding it
+   needs a user-to-server token, so it is Steve's ceremony, not Claude's.
+   A mint that fails here means the first unit will reach a green PR and
+   then be unable to merge, so it is a needs-Steve digest entry with the
+   exact step (App → Install → this repo), never a silent pass. An
+   org installation set to *All repositories* covers new repos
+   automatically — confirm which of the two applies and record it;
    **no seed placeholder survives** in any copied file — grep for `{{`
    and discard only `${{` (GitHub Actions expressions, which are
    legitimate and permanent). Do not narrow this to `{{[A-Z_]\+}}`: the

@@ -24,9 +24,15 @@ Two limits are worth stating because they are counter-intuitive:
 
 Elevated permissions require a stated reason and append an audit record.
 If the record cannot be written, nothing is minted: no record, no
-elevation. There is deliberately no way to print a token to stdout --
-in this environment stdout lands in a transcript on disk and in model
-context, where it would outlive the command that needed it.
+elevation.
+
+This tool never prints a token itself -- in this environment stdout lands
+in a transcript on disk and in model context, where it would outlive the
+command that needed it. It cannot stop the command it runs from printing
+one: the child receives the token in its environment, so `-- env` or
+`-- gh auth token` would expose it. That is a limit of handing a
+credential to a child process at all, not something a flag removes. Do
+not use this tool to dump an environment.
 
 Configuration (no value is ever hardcoded):
     SOFA_APP_ID     the App's numeric ID
@@ -59,21 +65,30 @@ DEFAULT_AUDIT = "~/.config/sofa-claude/elevations.log"
 ORG_LEVEL = ("organization_administration", "members", "organization_secrets",
              "organization_projects", "organization_hooks",
              "organization_self_hosted_runners", "organization_user_blocking")
-# Requesting any of these AT WRITE LEVEL requires a reason and leaves an
-# audit record. `administration` carries deletion AND ruleset removal;
-# `secrets`, `actions` and `workflows` can install or feed code that runs
-# with them. Read level is not elevation: `actions=read` is what an
-# ordinary CI check needs, and recording it would bury the writes that
-# matter in noise -- the audit log is a detection control, and a control
-# no one can read is not one.
+# Every mint naming one of these is recorded, at any level: `actions:read`
+# is log and artifact access, `secrets:read` enumerates a secret
+# inventory, and the audit log is Grant 4's detection control -- narrowing
+# what it sees to save a few lines a day is a bad trade. A *reason* is
+# demanded only for the write levels, so routine CI reads stay frictionless
+# while the trail stays intact; a reader wanting only writes can filter the
+# recorded permissions dict.
 ELEVATED = ORG_LEVEL + ("administration", "secrets", "actions", "workflows")
-WRITE_LEVELS = ("write", "admin")
+# Deny-by-default, like every other refusal here: anything that is not
+# exactly `read` counts as a write. An allowlist of write levels would let
+# an unanticipated value ("true", a level GitHub adds later) fall through
+# as harmless on the one permission that can remove a ruleset.
+READ_LEVEL = "read"
+
+
+def recorded_permissions(permissions):
+    """Names worth an audit record -- any level."""
+    return sorted(name for name in permissions if name in ELEVATED)
 
 
 def elevated_permissions(permissions):
-    """Names in `permissions` that are elevated at the level requested."""
+    """Names that additionally require a stated reason (write levels)."""
     return sorted(name for name, level in permissions.items()
-                  if name in ELEVATED and str(level).lower() in WRITE_LEVELS)
+                  if name in ELEVATED and str(level).strip().lower() != READ_LEVEL)
 
 
 class TokenError(RuntimeError):
@@ -129,6 +144,13 @@ def api(path, bearer, method="GET", payload=None):
         except Exception:
             pass
         raise TokenError(f"GitHub {err.code} on {method} {path}: {detail}")
+    except urllib.error.URLError as err:
+        # DNS, offline, TLS. Must surface as TokenError like any other
+        # credential failure: a traceback escaping here would reach the
+        # caller as an unhandled crash rather than a loud, typed refusal.
+        raise TokenError(f"Cannot reach GitHub for {method} {path}: {err.reason}")
+    except ValueError as err:
+        raise TokenError(f"Unparseable response from {method} {path}: {err}")
 
 
 def installation_id(account, jwt):
@@ -210,6 +232,7 @@ def mint(account, repositories, permissions, reason=None, app_id=None,
             f"repository list, so there is no such thing as a scoped one. "
             f"They are reachable only through create_repo(), which mints and "
             f"discards internally (Grant 4).")
+    recorded = recorded_permissions(permissions)
     elevated = elevated_permissions(permissions)
     if elevated and not (reason or "").strip():
         raise TokenError(
@@ -221,16 +244,17 @@ def mint(account, repositories, permissions, reason=None, app_id=None,
     if not app_id:
         raise TokenError("SOFA_APP_ID is not set; it is the App's numeric ID.")
     key_path = key_path or os.environ.get("SOFA_APP_KEY") or DEFAULT_KEY
-    if elevated:
-        entry = record_elevation(account, repositories, permissions, reason)
-        print(f"[gh_token] elevated ({', '.join(elevated)}) recorded: "
-              f"{entry['reason']}", file=sys.stderr)
+    if recorded:
+        entry = record_elevation(account, repositories, permissions, reason or "")
+        if elevated:
+            print(f"[gh_token] elevated ({', '.join(elevated)}) recorded: "
+                  f"{entry['reason']}", file=sys.stderr)
     jwt = app_jwt(app_id, key_path)
     result = api(f"/app/installations/{installation_id(account, jwt)}/access_tokens",
                  jwt, "POST",
                  {"repositories": list(repositories), "permissions": dict(permissions)})
-    if elevated:
-        record_elevation(account, repositories, permissions, reason,
+    if recorded:
+        record_elevation(account, repositories, permissions, reason or "",
                          event="granted")
     return result["token"], result.get("expires_at")
 

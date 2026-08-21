@@ -137,6 +137,22 @@ class CredentialTests(unittest.TestCase):
         self.assertEqual(seen["account"], "warblersafety")
         self.assertEqual(seen["repositories"], ["wilson"])
 
+    def test_any_credential_exception_yields_exit_4_not_1(self):
+        """Exit 1 means 'PR blocked'; a transport blip must not look like one."""
+        for boom in (RuntimeError("no key"), ValueError("bad json"),
+                     OSError("network down"), KeyError("token")):
+            with self.subTest(error=type(boom).__name__):
+                module = mock.Mock()
+                module.mint.side_effect = boom
+                with mock.patch.object(merge_dev, "_origin",
+                                       return_value=("o", "r")), \
+                     mock.patch.object(merge_dev, "_gh_token_module",
+                                       return_value=module), \
+                     mock.patch.object(merge_dev, "_gh") as fake_gh, \
+                     mock.patch("builtins.print"):
+                    self.assertEqual(merge_dev.main(["merge_dev.py", "12"]), 4)
+                fake_gh.assert_not_called()
+
     def test_credential_failure_stops_without_merging(self):
         module = mock.Mock()
         module.mint.side_effect = RuntimeError("no key on this machine")

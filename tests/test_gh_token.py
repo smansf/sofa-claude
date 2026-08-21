@@ -76,7 +76,7 @@ class ScopingTests(unittest.TestCase):
 
 
 class ElevationTests(unittest.TestCase):
-    def test_read_level_is_not_elevation(self):
+    def test_read_level_needs_no_reason(self):
         """`actions=read` is what an ordinary CI check needs."""
         self.assertEqual(gh_token.elevated_permissions({"actions": "read"}), [])
         self.assertEqual(gh_token.elevated_permissions({"administration": "read"}), [])
@@ -84,9 +84,25 @@ class ElevationTests(unittest.TestCase):
                               {"actions": "read", "checks": "read"})
         self.assertEqual(token, "ghs_stub")
 
-    def test_write_level_of_the_same_permission_is_elevation(self):
-        self.assertEqual(gh_token.elevated_permissions({"actions": "write"}),
+    def test_read_level_is_still_recorded(self):
+        """Narrowing the audit trail would narrow the detection control."""
+        self.assertEqual(gh_token.recorded_permissions({"actions": "read"}),
                          ["actions"])
+        self.assertEqual(gh_token.recorded_permissions({"contents": "write"}), [])
+
+    def test_unknown_level_counts_as_a_write(self):
+        """Deny-by-default: only the exact string `read` is not elevation."""
+        for level in ("write", "admin", True, "WRITE", "true", "", None, "rw"):
+            with self.subTest(level=level):
+                self.assertEqual(
+                    gh_token.elevated_permissions({"administration": level}),
+                    ["administration"])
+
+    def test_read_is_matched_case_and_space_insensitively(self):
+        for level in ("read", "READ", " read "):
+            with self.subTest(level=level):
+                self.assertEqual(
+                    gh_token.elevated_permissions({"actions": level}), [])
 
     def test_elevated_permission_requires_a_reason(self):
         repo_level = [p for p in gh_token.ELEVATED if p not in gh_token.ORG_LEVEL]
@@ -113,6 +129,29 @@ class ElevationTests(unittest.TestCase):
         self.assertIn("apply protect-main ruleset", stderr.getvalue())
         self.assertNotIn(token, stderr.getvalue(),
                          "the announcement must never carry the credential")
+
+
+class TransportTests(unittest.TestCase):
+    """Network failures must surface as TokenError, never as a traceback."""
+
+    def test_unreachable_github_becomes_a_token_error(self):
+        import urllib.error
+        with mock.patch.object(gh_token.urllib.request, "urlopen",
+                               side_effect=urllib.error.URLError("offline")):
+            with self.assertRaises(gh_token.TokenError) as caught:
+                gh_token.api("/app", "jwt-stub")
+        self.assertIn("Cannot reach GitHub", str(caught.exception))
+
+    def test_unparseable_response_becomes_a_token_error(self):
+        class FakeResponse:
+            def read(self): return b"<html>not json</html>"
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+        with mock.patch.object(gh_token.urllib.request, "urlopen",
+                               return_value=FakeResponse()):
+            with self.assertRaises(gh_token.TokenError) as caught:
+                gh_token.api("/app", "jwt-stub")
+        self.assertIn("Unparseable response", str(caught.exception))
 
 
 class ConfigurationTests(unittest.TestCase):
