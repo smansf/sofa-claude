@@ -76,6 +76,18 @@ class ScopingTests(unittest.TestCase):
 
 
 class ElevationTests(unittest.TestCase):
+    def test_read_level_is_not_elevation(self):
+        """`actions=read` is what an ordinary CI check needs."""
+        self.assertEqual(gh_token.elevated_permissions({"actions": "read"}), [])
+        self.assertEqual(gh_token.elevated_permissions({"administration": "read"}), [])
+        (token, _), _ = _mint("warblersafety", ["scratch"],
+                              {"actions": "read", "checks": "read"})
+        self.assertEqual(token, "ghs_stub")
+
+    def test_write_level_of_the_same_permission_is_elevation(self):
+        self.assertEqual(gh_token.elevated_permissions({"actions": "write"}),
+                         ["actions"])
+
     def test_elevated_permission_requires_a_reason(self):
         repo_level = [p for p in gh_token.ELEVATED if p not in gh_token.ORG_LEVEL]
         self.assertTrue(repo_level, "the repo-level elevated set must not be empty")

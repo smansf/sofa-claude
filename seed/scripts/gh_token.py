@@ -59,10 +59,21 @@ DEFAULT_AUDIT = "~/.config/sofa-claude/elevations.log"
 ORG_LEVEL = ("organization_administration", "members", "organization_secrets",
              "organization_projects", "organization_hooks",
              "organization_self_hosted_runners", "organization_user_blocking")
-# Requesting any of these requires a reason and leaves an audit record.
-# `administration` carries deletion AND ruleset removal; `secrets`,
-# `actions` and `workflows` can install or feed code that runs with them.
+# Requesting any of these AT WRITE LEVEL requires a reason and leaves an
+# audit record. `administration` carries deletion AND ruleset removal;
+# `secrets`, `actions` and `workflows` can install or feed code that runs
+# with them. Read level is not elevation: `actions=read` is what an
+# ordinary CI check needs, and recording it would bury the writes that
+# matter in noise -- the audit log is a detection control, and a control
+# no one can read is not one.
 ELEVATED = ORG_LEVEL + ("administration", "secrets", "actions", "workflows")
+WRITE_LEVELS = ("write", "admin")
+
+
+def elevated_permissions(permissions):
+    """Names in `permissions` that are elevated at the level requested."""
+    return sorted(name for name, level in permissions.items()
+                  if name in ELEVATED and str(level).lower() in WRITE_LEVELS)
 
 
 class TokenError(RuntimeError):
@@ -199,7 +210,7 @@ def mint(account, repositories, permissions, reason=None, app_id=None,
             f"repository list, so there is no such thing as a scoped one. "
             f"They are reachable only through create_repo(), which mints and "
             f"discards internally (Grant 4).")
-    elevated = sorted(p for p in permissions if p in ELEVATED)
+    elevated = elevated_permissions(permissions)
     if elevated and not (reason or "").strip():
         raise TokenError(
             f"Refusing to mint {', '.join(elevated)} without a stated reason. "

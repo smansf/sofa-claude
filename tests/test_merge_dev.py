@@ -90,10 +90,76 @@ class EvaluateTests(unittest.TestCase):
         self.assertEqual(len(blockers), 6)
 
 
+class RepoSlugTests(unittest.TestCase):
+    def test_parses_ssh_and_https_remotes(self):
+        for url in ("git@github.com:warblersafety/wilson.git",
+                    "https://github.com/warblersafety/wilson.git",
+                    "https://github.com/warblersafety/wilson",
+                    "ssh://git@github.com/warblersafety/wilson.git\n"):
+            with self.subTest(url=url):
+                self.assertEqual(merge_dev.repo_slug(url),
+                                 ("warblersafety", "wilson"))
+
+    def test_unparseable_remote_is_refused(self):
+        with self.assertRaises(RuntimeError):
+            merge_dev.repo_slug("not-a-remote")
+
+
+class CredentialTests(unittest.TestCase):
+    """No silent fallback: if the App cannot mint, nothing merges."""
+
+    def test_permissions_are_least_privilege(self):
+        perms = merge_dev.MERGE_PERMISSIONS
+        self.assertEqual(perms["contents"], "write")
+        self.assertEqual(perms["pull_requests"], "write")
+        # statusCheckRollup resolves workflow runs; read, never write.
+        self.assertEqual(perms["actions"], "read")
+        self.assertEqual(perms["checks"], "read")
+        for name, level in perms.items():
+            self.assertIn(level, ("read", "write"))
+        self.assertNotIn("administration", perms)
+
+    def test_scoped_to_this_repository_only(self):
+        seen = {}
+
+        def fake_mint(account, repositories, permissions, **kwargs):
+            seen.update(account=account, repositories=repositories)
+            return "ghs_stub", "later"
+
+        module = mock.Mock(mint=fake_mint)
+        with mock.patch.object(merge_dev, "_origin",
+                               return_value=("warblersafety", "wilson")), \
+             mock.patch.object(merge_dev, "_gh_token_module", return_value=module), \
+             mock.patch.object(merge_dev, "_gh",
+                               side_effect=subprocess.CalledProcessError(1, ["gh"])), \
+             mock.patch("builtins.print"):
+            merge_dev.main(["merge_dev.py", "12"])
+        self.assertEqual(seen["account"], "warblersafety")
+        self.assertEqual(seen["repositories"], ["wilson"])
+
+    def test_credential_failure_stops_without_merging(self):
+        module = mock.Mock()
+        module.mint.side_effect = RuntimeError("no key on this machine")
+        with mock.patch.object(merge_dev, "_origin",
+                               return_value=("o", "r")), \
+             mock.patch.object(merge_dev, "_gh_token_module", return_value=module), \
+             mock.patch.object(merge_dev, "_gh") as fake_gh, \
+             mock.patch("builtins.print") as fake_print:
+            self.assertEqual(merge_dev.main(["merge_dev.py", "12"]), 4)
+        fake_gh.assert_not_called()
+        printed = " ".join(str(c.args[0]) for c in fake_print.call_args_list)
+        self.assertIn("CREDENTIAL FAILURE", printed)
+        self.assertIn("no key on this machine", printed)
+        self.assertIn("do not fall back to another credential", printed)
+
+
 class TransportTests(unittest.TestCase):
     def test_transport_failure_is_loud_and_does_not_merge(self):
         err = subprocess.CalledProcessError(1, ["gh"], stderr="boom")
-        with mock.patch.object(merge_dev, "_gh", side_effect=err):
+        module = mock.Mock(mint=mock.Mock(return_value=("ghs_stub", "later")))
+        with mock.patch.object(merge_dev, "_origin", return_value=("o", "r")), \
+             mock.patch.object(merge_dev, "_gh_token_module", return_value=module), \
+             mock.patch.object(merge_dev, "_gh", side_effect=err):
             with mock.patch("builtins.print") as fake_print:
                 self.assertEqual(merge_dev.main(["merge_dev.py", "12"]), 3)
         printed = " ".join(str(c.args[0]) for c in fake_print.call_args_list)

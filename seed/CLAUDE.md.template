@@ -44,6 +44,10 @@ refreshes it.
   available on private repos at this plan — do not rely on it.
 - Deploy wiring lives in Steve's Vercel account; Claude holds no Vercel
   credentials. Claude never merges to `staging` or `main`.
+- GitHub credentials come from `scripts/gh_token.py` — a short-lived App
+  token scoped to this repo and to the permissions the task needs. There
+  is no PAT and no ambient `GH_TOKEN`; if minting fails, work stops
+  rather than reaching for another credential.
 - Promote often: a `dev` far ahead of `staging` makes promotion scary
   instead of routine. Claude flags when the gap exceeds ~10 units.
 

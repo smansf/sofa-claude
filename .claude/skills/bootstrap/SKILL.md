@@ -31,6 +31,9 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    `seed/pull_request_template.md` → `.github/pull_request_template.md`,
    `seed/ISSUE_TEMPLATE/unit.yml` → `.github/ISSUE_TEMPLATE/unit.yml`,
    `seed/ISSUE_TEMPLATE/config.yml` → `.github/ISSUE_TEMPLATE/config.yml`,
+   `seed/scripts/gh_token.py` → `scripts/gh_token.py` (the repo's only
+   credential path; `merge_dev.py` imports it from alongside itself and
+   stops rather than falling back to ambient auth if it is absent),
    `seed/scripts/merge_dev.py` → `scripts/merge_dev.py` (align its
    `REQUIRED_CHECKS` with the workload ci.yml's job names, and keep its
    executable bit — mode `100755`, so the shebang stays honest and a lint
