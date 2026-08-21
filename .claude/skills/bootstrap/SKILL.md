@@ -1,6 +1,6 @@
 ---
 name: bootstrap
-description: Bootstrap a workload repo from the seed kit — elicit a charter with stakes tier and falsifiable end condition, add a stakes-scaled design record, copy and adapt seed/, wire branches, labels, and standing issues.
+description: Bootstrap a workload repo from the seed kit — elicit a charter and design record through real discussion with Steve (intended use, non-goals, a stated review-depth conclusion, a falsifiable end condition), copy and adapt seed/, wire branches, labels, and standing issues.
 ---
 
 # bootstrap
@@ -15,23 +15,34 @@ step that "just works" on session credentials today is the step that
 breaks the day the PAT is gone.
 
 1. **Charter first** (`docs/charter.md`, one page, elicited from Steve):
-   what is being built and why; who uses it; the **stakes tier**
-   (throwaway / standard / production) that sets review depth everywhere;
-   the **test floor**, in whatever shape the subject actually has — a
+   what is being built and why; who uses it; intended use — audience,
+   environment, anticipated load, and the blast-radius/reversibility of
+   failure — discussed explicitly. From that discussion the charter
+   states its own concrete review-depth conclusion in plain language:
+   earned from this project's specifics, not picked from a menu. The
+   same conversation surfaces non-goals — what's deliberately out of
+   scope — agreed with Steve in the discussion, not inferred afterward
+   from what wasn't mentioned, and the charter states them. Also: the
+   **test floor**, in whatever shape the subject actually has — a
    coverage percentage, fixture-corpus completeness, a property suite —
-   which must be mechanically checkable by CI, because a shape that forces
-   a fake number is the wrong shape; and the project's **end condition**
-   — what done looks like, written before work starts and *falsifiable*:
-   if you can't say how you'd test that it's met, rewrite it until you can.
-2. **Design record — scaled by the stakes tier.** Throwaway: skip
-   entirely; the charter is enough. Standard and production: one page
-   (`docs/design.md`) — stack choice and why, architecture sketch, data
-   shape, main structural risks — reviewed with `doc-review`. At
-   production stakes, Steve's approving GitHub review **on the bootstrap
-   PR itself** is the approval artifact — Claude merges that PR only
-   after it exists; chat assent is not approval. Decisions, not
-   documents: a section with nothing load-bearing to say gets deleted,
-   not filled.
+   which must be mechanically checkable by CI, because a shape that
+   forces a fake number is the wrong shape; and the project's **end
+   condition** — what done looks like, written before work starts and
+   *falsifiable*: if you can't say how you'd test that it's met, rewrite
+   it until you can.
+2. **Design record — always, produced through discussion.** No skip
+   case, for any project: every bootstrap gets one. `docs/design.md` is
+   elicited the same way as the charter — real back-and-forth with Steve
+   first (alternatives, tradeoffs, architecture), not drafted solo and
+   presented for approval. Content: stack choice and why, architecture
+   sketch, data shape, main structural risks. Length is whatever its
+   load-bearing content requires — no page cap; the existing rule (a
+   section with nothing load-bearing to say gets deleted, not filled)
+   governs the whole document, not only its sections. Reviewed with
+   `doc-review`, which is relied on to catch padding — no separate
+   length-based enforcement. The bootstrap PR merges through the same
+   `merge_dev.py` gate as any other unit; there is no special-cased
+   requirement for Steve's personal GitHub review on the bootstrap PR.
 3. **Copy the seed**: `seed/CLAUDE.md.template` → `CLAUDE.md`,
    `seed/workflows/ci.yml` → `.github/workflows/ci.yml`,
    `seed/workflows/backlog-expiry.yml` → `.github/workflows/backlog-expiry.yml`,
@@ -112,15 +123,18 @@ breaks the day the PAT is gone.
    one `--perm issues=write` mint; fill `{{HANDOFF_ISSUE}}` in CLAUDE.md
    with the issue's number. Vercel wiring is Steve's step — list it in
    the needs-Steve digest, don't wait.
-5. **Propose the first unit**: one issue, frozen acceptance criteria,
-   sized to reach `dev` within a session. Product code, not process — if
-   the process pinches during the unit, that's a sofa-claude bleed to
-   note, not machinery to build here.
+5. **Propose the first unit**: one issue, frozen acceptance criteria.
+   Name the riskiest or least-certain assumption surfaced during the
+   charter/design conversation, and size the unit to test that
+   assumption as cheaply as possible — not merely to fit within one
+   session. If no real unknown was surfaced, say so rather than
+   inventing one. Product code, not process — if the process pinches
+   during the unit, that's a sofa-claude bleed to note, not machinery to
+   build here.
 6. **Verify and file** — bootstrap closes by checking, not asserting.
-   Runs **after the bootstrap PR merges**; if the session ends first
-   (production stakes waiting on Steve's review), record step 6 as owed
-   in the new repo's handoff issue — the next session runs it before any
-   unit work. Mechanically confirm, via `gh` against the default branch
+   Runs **after the bootstrap PR merges**; if the session ends first,
+   record step 6 as owed in the new repo's handoff issue — the next
+   session runs it before any unit work. Mechanically confirm, via `gh` against the default branch
    (one `--perm contents=read --perm issues=read --perm metadata=read`
    mint covers this step's reads), every item steps 3–4 claimed: default branch is `dev`; `staging`
    exists; labels `urgent`, `keep`, `standing` exist; `ci.yml`,
@@ -152,9 +166,10 @@ breaks the day the PAT is gone.
    automatically — confirm which of the two applies and record it;
    **no seed placeholder survives** in any copied file — grep for `{{`
    and discard only `${{` (GitHub Actions expressions, which are
-   legitimate and permanent). Do not narrow this to `{{[A-Z_]\+}}`: the
-   stakes tier is written `{{throwaway | standard | production}}` and
-   would slip through, leaving review depth read off an unfilled slot
+   legitimate and permanent). Do not narrow this to `{{[A-Z_]\+}}` on
+   the assumption every placeholder looks like that — a future
+   placeholder using different syntax would slip through unnoticed,
+   leaving review depth (or anything else) read off an unfilled slot
    forever. An unfilled placeholder is the seed silently ceasing to be
    authoritative, which is the defect class this step exists for. The
    `test` job ran a real command, and the repo tracks at least one test
