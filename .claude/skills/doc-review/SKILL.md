@@ -9,9 +9,9 @@ For prose that governs behavior: charters, rulebooks, grants, design
 records. Not for code — that is `/code-review`, Steve's to type. Where
 this skill runs: every PR to sofa-claude (there both lanes run — the
 seam rule, recorded in that repo's decisions/0003), and workload design
-prose — the charter and design record at standard/production stakes, at
-bootstrap and on any later amendment. Unit-level acceptance criteria get
-no adversarial pass: that is proportionality, not an omission.
+prose — the charter and design record, at bootstrap and on any later
+amendment. Unit-level acceptance criteria get no adversarial pass: that
+is proportionality, not an omission.
 
 ## Before running
 
@@ -35,9 +35,9 @@ the artifact — and must not read any other review's findings first.
 > grade (urgent-grade / keep-grade). Fewer is fine — padding is itself a
 > failure. One round; no recommendations for further review passes.
 
-For a design record, Context must quote the charter's stakes tier and
-end condition and list the record's own claimed risks — a bland Context
-is a defective review, not a compliant one.
+For a design record, Context must quote the charter's review-depth
+conclusion and end condition and list the record's own claimed risks —
+a bland Context is a defective review, not a compliant one.
 
 ## After
 
