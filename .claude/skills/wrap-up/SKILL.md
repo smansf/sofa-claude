@@ -19,9 +19,11 @@ description: End-of-session handoff — drain in-flight work, reconcile issue st
    number would silently destroy someone's unrelated issue. Content:
    current state, in-flight PRs, the next session's starting point.
    Append nothing; the body is the whole handoff.
-4. Refresh the **body** of the needs-Steve digest issue (Issue #2 in
-   sofa-claude), under the same `standing`-label guard: list only items
-   genuinely blocked on Steve — pending merges/promotions, open grant
+4. Refresh the **body** of the needs-Steve digest issue — **always
+   sofa-claude's own** (Issue #2 in smansf/sofa-claude), whatever repo
+   the session ran in: the digest aggregates across repos, and workload
+   repos carry none of their own. Same `standing`-label guard: list only
+   items genuinely blocked on Steve — pending merges/promotions, open grant
    decisions, halted runs — each with its paste-ready command where one
    applies (e.g. `/code-review high <PR URL> --comment`). An empty list is
    a valid and good state. End the digest with one line — the current count

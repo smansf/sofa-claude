@@ -66,7 +66,11 @@ then the PAT rules stand and this grant is inert.
   Issues #22, #23). Until those PRs merge, a declared credential no code
   calls is prose, not a rail (decisions/0003), and merging this grant
   alone would raise the App's ceiling before the control that answers it
-  is load-bearing.
+  is load-bearing. **Activation is one beat, not a merge alone:** the
+  merge that satisfies these preconditions, the revocation of the PAT,
+  and the matching rewrite of `~/.claude/CLAUDE.md` happen together —
+  from then on an interactive session's `gh` also runs under
+  per-invocation minted tokens, and no PAT survives as a fallback.
 
 - The GitHub surface is a GitHub App (`sofa-claude-ops`), not a personal
   access token. Its private key lives outside any repository, mode 600,
@@ -121,10 +125,16 @@ then the PAT rules stand and this grant is inert.
   platform config sitting inside the same permission bootstrap needs to
   create it, so a wiring token can strip the gate, after which an ordinary
   `contents` token merges to `main` without breaching any rule stated
-  here. Bootstrap therefore verifies protection by behaviour — attempting
-  a write and requiring the refusal — never by trusting a success code
-  (Issue #23). GitHub bundles repository deletion into the same
-  permission and does not let us split it off.
+  here. Bootstrap therefore verifies protection rather than trusting a
+  success code (Issue #23): the push path by behaviour — attempting a
+  write and requiring a refusal *by rules*, an error never counting —
+  and the merge path by reading back the rules GitHub reports as
+  applying, requiring at least one approving human review. The merge
+  path gets a read-back, not a behavioural probe, because its
+  behavioural test is an actual merge — which is how the zero-approval
+  hole was demonstrated on a throwaway repo (PR #32, finding 1). GitHub
+  bundles repository deletion into the same permission and does not let
+  us split it off.
 
 - **The widening is recorded, not glossed.** Steve granted the App
   organization-level Administration on `warblersafety` (2026-08-20),

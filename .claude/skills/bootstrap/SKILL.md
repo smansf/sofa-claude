@@ -7,6 +7,13 @@ description: Bootstrap a workload repo from the seed kit — elicit a charter wi
 
 Run this *from the workload repo's own directory*, never from sofa-claude.
 
+Every `gh` call in this skill runs under a short-lived App token minted
+by the workload's own copy of the helper — `python3 scripts/gh_token.py
+--account <owner> --repos <name> --perm <name=level> -- gh ...` — never
+ambient session auth. Grant 4's regime has no ambient fallback, and a
+step that "just works" on session credentials today is the step that
+breaks the day the PAT is gone.
+
 1. **Charter first** (`docs/charter.md`, one page, elicited from Steve):
    what is being built and why; who uses it; the **stakes tier**
    (throwaway / standard / production) that sets review depth everywhere;
@@ -58,27 +65,43 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    reports no data and fails, which is defect 2 recurring one step later,
    because the floor and the test run are the same command. Real module
    plus real test satisfies every floor shape.
-4. **Wire the repo**: run `wire_repo.py --repo OWNER/NAME --checkout .`
-   from this skill's directory. It creates `dev` and `staging`, sets `dev`
-   as the default branch, applies the `protect-main` / `protect-staging`
-   rulesets, and then **probes what GitHub actually enforces** — a no-op
-   fast-forward on each protected branch, refused if protection is real.
-   A 201 from the rulesets API is not protection; only the probe is. It
-   takes its credential from the repo's own `scripts/gh_token.py`, so it
-   stops if the seed copy is incomplete rather than wiring a repo whose
-   merge path could never authenticate. Exit 0 means everything that
-   should be protected is; **exit 5 means wired but NOT protected** —
-   normal on a private repo, since free-plan rulesets cover public repos
-   only and org-level rulesets need Enterprise. Exit 5 is never a pass:
-   copy its summary verbatim into the repo's CLAUDE.md **and** the
-   needs-Steve digest, and fill `{{ENFORCEMENT}}` in the seeded CLAUDE.md
-   from it, so the distinction between technical and process-only
-   enforcement outlives this session. Step 6's placeholder grep catches it
-   if you skip that. Exit 4 means nothing
-   was wired; fix the cause, do not proceed.
+4. **Wire the repo**: from the workload repo's root — where this whole
+   skill already runs — invoke
+   `python3 ~/.claude/skills/bootstrap/wire_repo.py --repo OWNER/NAME
+   --checkout .`. The script lives in the skill; the credential comes
+   from the checkout (`scripts/gh_token.py`), so it stops if the seed
+   copy is incomplete rather than wiring a repo whose merge path could
+   never authenticate. It creates `dev` and `staging`, sets `dev` as the
+   default branch, applies the `protect-main` / `protect-staging`
+   rulesets — requiring **one approving human review** on the merge
+   path, because zero approvals requires a PR, not a human — and then
+   **verifies what GitHub actually enforces**, on both paths a change
+   can take: a no-op fast-forward push that must be refused *by rules*
+   (an error is not a refusal), and a read-back of the rules GitHub
+   reports as applying to the branch, which must include that
+   one-approval merge gate. A 201 from the rulesets API is not
+   protection; only the two checks together are. Exit 0 means everything
+   that should be protected is. **Exit 5 means wired but NOT protected**,
+   and its summary says which of two very different things happened:
+   the free-plan limitation (rulesets cover public repos only, org-level
+   rulesets need Enterprise — an accepted outcome: copy the summary
+   verbatim into the repo's CLAUDE.md **and** the central needs-Steve
+   digest, smansf/sofa-claude Issue #2, workload repos carry no digest
+   of their own, and fill `{{ENFORCEMENT}}` in the seeded CLAUDE.md from
+   it so the distinction outlives this session — step 6's placeholder
+   grep catches it if you skip that), or **recorded-but-unenforced**,
+   an anomaly to investigate and never to record as accepted. **Exit 4
+   means wiring or verification failed partway**: its output lists
+   exactly what had been done — and says so when nothing was — but none
+   of it is verified. Fix the cause and re-run; never treat exit 4 as
+   either clean or wired.
    **Disable "automatically delete head branches"**
-   (`gh repo edit --delete-branch-on-merge=false`, then confirm with
-   `gh repo view --json deleteBranchOnMerge`): a promotion PR's head *is*
+   (`python3 scripts/gh_token.py --account OWNER --repos NAME
+   --perm administration=write --reason "bootstrap OWNER/NAME: turn off
+   delete-branch-on-merge" -- gh repo edit OWNER/NAME
+   --delete-branch-on-merge=false`, then confirm under a read mint:
+   `... --perm metadata=read -- gh repo view OWNER/NAME --json
+   deleteBranchOnMerge`): a promotion PR's head *is*
    a long-lived branch, so the setting deletes `staging` the first time
    Steve promotes to `main`, and `merge_dev.py` already deletes unit
    branches itself. The App can do this now — it holds repository
@@ -88,10 +111,11 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    seeded CLAUDE.md carries the check at the moment it bites, holding the
    *first promotion* until the setting is off.
    Create labels `urgent`, `keep`,
-   `standing`; create the standing handoff issue **labeled `standing`**
-   (unlabeled, the repo's own expiry workflow will close it) and fill
-   `{{HANDOFF_ISSUE}}` in CLAUDE.md with its number. Vercel wiring is
-   Steve's step — list it in the needs-Steve digest, don't wait.
+   `standing`, and the standing handoff issue **labeled `standing`**
+   (unlabeled, the repo's own expiry workflow will close it), all under
+   one `--perm issues=write` mint; fill `{{HANDOFF_ISSUE}}` in CLAUDE.md
+   with the issue's number. Vercel wiring is Steve's step — list it in
+   the needs-Steve digest, don't wait.
 5. **Propose the first unit**: one issue, frozen acceptance criteria,
    sized to reach `dev` within a session. Product code, not process — if
    the process pinches during the unit, that's a sofa-claude bleed to
@@ -100,8 +124,9 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    Runs **after the bootstrap PR merges**; if the session ends first
    (production stakes waiting on Steve's review), record step 6 as owed
    in the new repo's handoff issue — the next session runs it before any
-   unit work. Mechanically confirm, via `gh` against the default branch,
-   every item steps 3–4 claimed: default branch is `dev`; `staging`
+   unit work. Mechanically confirm, via `gh` against the default branch
+   (one `--perm contents=read --perm issues=read --perm metadata=read`
+   mint covers this step's reads), every item steps 3–4 claimed: default branch is `dev`; `staging`
    exists; labels `urgent`, `keep`, `standing` exist; `ci.yml`,
    `backlog-expiry.yml`, `pull_request_template.md`, both issue templates
    (`config.yml` with `blank_issues_enabled: false`), `.gitignore`, and

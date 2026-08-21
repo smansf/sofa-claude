@@ -25,11 +25,16 @@ description: Start-of-session orientation — one cheap read of the standing han
    from sofa-claude `main`'s `.claude/skills/` (compare via `gh`), refresh
    the copies from merged `main` — never from a branch — before relying on
    any skill.
-6. Credential presence check: confirm the App key is readable
-   (`test -r ~/.config/sofa-claude/app.pem`) and that `SOFA_APP_ID` is
-   set. **Presence only — never read, print, or echo a key or token.** If
-   either is missing, say so before starting work: every scripted GitHub
-   path stops without them, and finding that out mid-unit wastes the unit.
+6. Credential presence check: confirm the key `gh_token.py` will
+   actually use is readable — the file named by `SOFA_APP_KEY` when that
+   is set, else `~/.config/sofa-claude/app.pem`
+   (`test -r "${SOFA_APP_KEY:-$HOME/.config/sofa-claude/app.pem}"`) —
+   and that `SOFA_APP_ID` is set. **Presence only — never read, print,
+   or echo a key or token.** If either is missing, say so before
+   starting work: every scripted GitHub path stops without them, and
+   finding that out mid-unit wastes the unit. This is an operator
+   convenience, not a Grant 1 rail — it neither notifies nor halts, and
+   does not count toward that grant's notify-and-halt precondition.
 
 Do not deep-read decision records, grants, or history reflexively — pull
 them in only when the confirmed scope needs them.
