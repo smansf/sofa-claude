@@ -91,6 +91,29 @@ class EvaluateTests(unittest.TestCase):
         self.assertEqual(len(blockers), 6)
 
 
+class CommitStatusTests(unittest.TestCase):
+    """statusCheckRollup mixes CheckRun and StatusContext nodes."""
+
+    def test_failing_commit_status_blocks_the_merge(self):
+        rollup = GREEN + [{"context": "vercel — preview", "state": "FAILURE"}]
+        blockers = merge_dev.evaluate(pr(statusCheckRollup=rollup), [REVIEW])
+        self.assertTrue(any("vercel — preview" in b for b in blockers), blockers)
+
+    def test_pending_commit_status_blocks_the_merge(self):
+        rollup = GREEN + [{"context": "vercel — preview", "state": "PENDING"}]
+        blockers = merge_dev.evaluate(pr(statusCheckRollup=rollup), [REVIEW])
+        self.assertTrue(any("vercel — preview" in b for b in blockers), blockers)
+
+    def test_successful_commit_status_does_not_block(self):
+        rollup = GREEN + [{"context": "vercel — preview", "state": "SUCCESS"}]
+        self.assertEqual(merge_dev.evaluate(pr(statusCheckRollup=rollup), [REVIEW]), [])
+
+    def test_the_permission_that_makes_those_nodes_visible_is_requested(self):
+        """Without it the nodes never arrive, and what never arrives cannot block."""
+        self.assertEqual(merge_dev.INSPECT_PERMISSIONS["statuses"], "read")
+        self.assertEqual(merge_dev.MERGE_PERMISSIONS["statuses"], "read")
+
+
 class RepoSlugTests(unittest.TestCase):
     def test_parses_ssh_and_https_remotes(self):
         for url in ("git@github.com:warblersafety/wilson.git",
