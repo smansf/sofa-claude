@@ -45,46 +45,53 @@ import subprocess
 import sys
 
 # The fields the inspect query asks for, and the permission each one
-# needs. INSPECT_PERMISSIONS is DERIVED from this map — adding a field
-# below without a permissions entry fails the test suite, because three
-# consecutive PRs (#24, #25, #27) each corrected a hand-asserted set
-# that the previous suite had waved through (sofa-claude Issue #30).
-FIELDS = ("isDraft", "state", "baseRefName", "headRefName",
-          "statusCheckRollup", "comments")
+# needs. INSPECT_PERMISSIONS is DERIVED from this map plus
+# ROLLUP_PERMISSIONS below — adding a field without a permissions entry
+# fails the test suite, because three consecutive PRs (#24, #25, #27)
+# each corrected a hand-asserted set that the previous suite had waved
+# through (sofa-claude Issue #30).
+FIELDS = ("isDraft", "state", "baseRefName", "headRefName", "headRefOid",
+          "comments")
 FIELD_PERMISSIONS = {
     "isDraft": {"pull_requests": "read"},
     "state": {"pull_requests": "read"},
     "baseRefName": {"pull_requests": "read"},
     "headRefName": {"pull_requests": "read"},
-    # The rollup returns two node shapes, each behind its own permission:
-    # CheckRun (`checks`) and StatusContext (`statuses`) — the latter is
-    # what a deployment preview posts — and resolving each check's
-    # workflow run is what `actions` is for. No failure mode announces an
-    # omission reliably, which is why this map is the control (Issue #30).
-    # Probed 2026-08-21: on a PUBLIC repo the query resolved under every
-    # subset tried — omission is silent there; on a private repo the
-    # "Resource not accessible by integration" error PR #27 attributed to
-    # omitting `actions` appeared with the FULL set too (Issue #33), so
-    # the loud error marks the private-repo rollup read itself, not a
-    # specific missing permission.
-    "statusCheckRollup": {"checks": "read", "statuses": "read",
-                          "actions": "read"},
+    "headRefOid": {"pull_requests": "read"},  # the commit the rollup reads
     "comments": {"pull_requests": "read"},
 }
 
+# The CI-status rollup used to be a field on the query above
+# (statusCheckRollup) — but on a private repo it fails outright,
+# "Resource not accessible by integration", under the FULL permission
+# set below; the same commit's checks and statuses read back cleanly
+# over REST under the same permissions (Issue #33, probed 2026-08-21).
+# So it is read as two REST calls instead (_fetch_rollup) and reshaped
+# into the same CheckRun/StatusContext node list the field used to
+# produce — evaluate() and _split_rollup() below are unchanged; only
+# how the data arrives is. Resolving each check's workflow run — what
+# `actions` was for — turns out not to be needed at all: it was never
+# the cause of the private-repo failure, just a permission requested
+# alongside it.
+ROLLUP_PERMISSIONS = {"checks": "read", "statuses": "read"}
+
 # Whether gh reports the field as null when the token cannot resolve it,
-# rather than failing the whole query: true for the connection-backed
-# fields, false for the four scalars that ride on the pull_requests read
-# the query itself needs (present whenever the query succeeds at all).
-# Every FIELDS entry must be classified — the derivation below KeyErrors
-# on an unclassified field, for the same reason INSPECT_PERMISSIONS is
-# derived rather than hand-asserted (Issue #30).
+# rather than failing the whole query: true for comments (a
+# connection), false for the five scalars that ride on the pull_requests
+# read the query itself needs (present whenever the query succeeds at
+# all). The rollup is no longer part of this query — a REST permission
+# problem surfaces as a thrown error, never a silent null, so main()
+# treats a failed rollup fetch as a transport failure like any other
+# failed gh call, not as an unresolved field. Every FIELDS entry must be
+# classified — the derivation below KeyErrors on an unclassified field,
+# for the same reason INSPECT_PERMISSIONS is derived rather than
+# hand-asserted (Issue #30).
 FIELD_NULL_MEANS_UNRESOLVED = {
     "isDraft": False,
     "state": False,
     "baseRefName": False,
     "headRefName": False,
-    "statusCheckRollup": True,
+    "headRefOid": False,
     "comments": True,
 }
 UNRESOLVED_NULL_FIELDS = tuple(
@@ -94,13 +101,14 @@ UNRESOLVED_NULL_FIELDS = tuple(
 # needs nothing writable, so a refused PR never has a merge-capable
 # credential in the room at all. The write token is minted only once
 # evaluate() has returned no blockers — and it carries ONLY what the
-# merge call itself needs: the inspection surface (checks, statuses,
-# actions) stays out of the merge token, because the rollup was already
+# merge call itself needs: the inspection surface (checks, statuses)
+# stays out of the merge token, because the rollup was already
 # evaluated under the read token before this one exists (Issue #30).
 def _derive_inspect():
     perms = {"metadata": "read"}
     for field in FIELDS:
         perms.update(FIELD_PERMISSIONS[field])
+    perms.update(ROLLUP_PERMISSIONS)
     return perms
 
 INSPECT_PERMISSIONS = _derive_inspect()
@@ -275,6 +283,27 @@ def _gh(args, env):
                           text=True, env=env).stdout
 
 
+def _fetch_rollup(owner, repo, sha, env):
+    """The CI-status rollup, read as two REST calls (Issue #33) and
+    reshaped into the same CheckRun/StatusContext node list the GraphQL
+    statusCheckRollup field used to produce, so evaluate() and
+    _split_rollup() need not know which API the data came from. Case is
+    left as REST returns it (lowercase) — _verdict() upcases whatever
+    it is handed, GraphQL or REST alike.
+    """
+    runs = json.loads(_gh(
+        ["api", f"repos/{owner}/{repo}/commits/{sha}/check-runs"], env))
+    combined = json.loads(_gh(
+        ["api", f"repos/{owner}/{repo}/commits/{sha}/status"], env))
+    nodes = [{"__typename": "CheckRun", "name": c.get("name"),
+             "conclusion": c.get("conclusion"), "status": c.get("status")}
+            for c in runs.get("check_runs") or []]
+    nodes += [{"__typename": "StatusContext", "context": s.get("context"),
+              "state": s.get("state")}
+             for s in combined.get("statuses") or []]
+    return nodes
+
+
 def _transport_failure(err):
     print("TRANSPORT FAILURE — nothing was merged.")
     detail = (getattr(err, "stderr", "") or "").strip()
@@ -332,6 +361,11 @@ def main(argv):
             + " — a permission gap, not a blocked PR. The decision needs "
               "those fields; fix the credential rather than reading their "
               "absence as a refusal.")
+    try:
+        pr["statusCheckRollup"] = _fetch_rollup(owner, repo,
+                                                pr["headRefOid"], env)
+    except subprocess.CalledProcessError as err:
+        return _transport_failure(err)
     bodies = [c.get("body", "") for c in pr.get("comments") or []]
     blockers, pending = evaluate(pr, bodies)
     if blockers:
