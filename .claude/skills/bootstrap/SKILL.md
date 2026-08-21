@@ -72,44 +72,40 @@ breaks the day the PAT is gone.
    from the checkout (`scripts/gh_token.py`), so it stops if the seed
    copy is incomplete rather than wiring a repo whose merge path could
    never authenticate. It creates `dev` and `staging`, sets `dev` as the
-   default branch, applies the `protect-main` / `protect-staging`
+   default branch, **disables delete-branch-on-merge in the same
+   call** — a promotion PR's head *is* a long-lived branch, so left on,
+   the setting deletes `staging` the first time Steve promotes to
+   `main`, while `merge_dev.py` already deletes unit branches itself —
+   applies the `protect-main` / `protect-staging`
    rulesets — requiring **one approving human review** on the merge
    path, because zero approvals requires a PR, not a human — and then
-   **verifies what GitHub actually enforces**, on both paths a change
-   can take: a no-op fast-forward push that must be refused *by rules*
-   (an error is not a refusal), and a read-back of the rules GitHub
-   reports as applying to the branch, which must include that
-   one-approval merge gate. A 201 from the rulesets API is not
-   protection; only the two checks together are. Exit 0 means everything
+   **verifies what GitHub actually enforces**: an independent read-back
+   of the default branch and delete-branch-on-merge (never the write's
+   echo), and both paths a change can take — a no-op fast-forward push
+   that must be refused *by rules* (an error is not a refusal), and a
+   read-back of the rules GitHub reports as applying to the branch,
+   which must include that one-approval merge gate. A 201 from the
+   rulesets API is not protection; only the two checks together are. Exit 0 means everything
    that should be protected is. **Exit 5 means wired but NOT protected**,
    and its summary says which of two very different things happened:
    the free-plan limitation (rulesets cover public repos only, org-level
    rulesets need Enterprise — an accepted outcome: copy the summary
    verbatim into the repo's CLAUDE.md **and** the central needs-Steve
-   digest, smansf/sofa-claude Issue #2, workload repos carry no digest
-   of their own, and fill `{{ENFORCEMENT}}` in the seeded CLAUDE.md from
-   it so the distinction outlives this session — step 6's placeholder
+   digest, smansf/sofa-claude Issue #2 — workload repos carry no digest
+   of their own, so this is the one write that leaves the workload's
+   scope: `python3 scripts/gh_token.py --account smansf --repos
+   sofa-claude --perm issues=write --reason "needs-Steve digest" -- gh
+   issue edit 2 --repo smansf/sofa-claude --body-file ...`; if that mint
+   fails, the App's smansf installation does not cover sofa-claude —
+   tell Steve in the recap instead of writing nothing silently — and
+   fill `{{ENFORCEMENT}}` in the seeded CLAUDE.md from the same summary
+   so the distinction outlives this session — step 6's placeholder
    grep catches it if you skip that), or **recorded-but-unenforced**,
    an anomaly to investigate and never to record as accepted. **Exit 4
    means wiring or verification failed partway**: its output lists
    exactly what had been done — and says so when nothing was — but none
    of it is verified. Fix the cause and re-run; never treat exit 4 as
    either clean or wired.
-   **Disable "automatically delete head branches"**
-   (`python3 scripts/gh_token.py --account OWNER --repos NAME
-   --perm administration=write --reason "bootstrap OWNER/NAME: turn off
-   delete-branch-on-merge" -- gh repo edit OWNER/NAME
-   --delete-branch-on-merge=false`, then confirm under a read mint:
-   `... --perm metadata=read -- gh repo view OWNER/NAME --json
-   deleteBranchOnMerge`): a promotion PR's head *is*
-   a long-lived branch, so the setting deletes `staging` the first time
-   Steve promotes to `main`, and `merge_dev.py` already deletes unit
-   branches itself. The App can do this now — it holds repository
-   administration — so a 403 here is a real failure to investigate, not
-   the expected outcome it once was (sofa-claude Issue #14, closed).
-   Do not write it as a standing bar the repo starts out violating: the
-   seeded CLAUDE.md carries the check at the moment it bites, holding the
-   *first promotion* until the setting is off.
    Create labels `urgent`, `keep`,
    `standing`, and the standing handoff issue **labeled `standing`**
    (unlabeled, the repo's own expiry workflow will close it), all under
@@ -155,16 +151,19 @@ breaks the day the PAT is gone.
    forever. An unfilled placeholder is the seed silently ceasing to be
    authoritative, which is the defect class this step exists for. The
    `test` job ran a real command, and the repo tracks at least one test
-   file and the module it covers. `deleteBranchOnMerge` is false, or the
-   needs-Steve digest carries it with the click path;
+   file and the module it covers. `deleteBranchOnMerge` is false —
+   wire_repo set and read it back, so a true here means the wiring was
+   changed since;
    the standing handoff issue exists, carries `standing`, and CLAUDE.md
    names its number. A failed check that one `gh` command repairs is
    re-run once, re-verified, and noted in the
    bootstrap PR — repaired loudly, never silently. What still fails gets
    filed in the new repo, labeled by the seeded triage doctrine —
    `urgent` when it invalidates the first unit's premise, else `keep`;
-   a wrong default branch additionally stays under step 4's
-   stop-and-digest rule. Steve-owed items (Vercel wiring, ruleset
+   a wrong default branch or a true `deleteBranchOnMerge` means
+   something wire_repo verified has been undone — re-run it and
+   investigate before any unit work, never hand-patch the one item.
+   Steve-owed items (Vercel wiring, ruleset
    creation) go in the needs-Steve digest with the exact steps.
    Bootstrap ends only when every check is green or every gap is filed.
 

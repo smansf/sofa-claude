@@ -54,9 +54,11 @@ refreshes it.
   credentials. Claude never merges to `staging` or `main`.
 - Every GitHub call from this repo — `scripts/merge_dev.py`, or a
   session's own `gh` — runs under a short-lived App token minted by
-  `scripts/gh_token.py`, scoped to this repo and to the permissions the
-  task needs (`python3 scripts/gh_token.py --account <owner> --repos
-  <name> --perm contents=read -- gh ...`). There is no ambient fallback:
+  `scripts/gh_token.py`, scoped to the repositories and permissions the
+  task actually touches — usually this repo (`python3 scripts/gh_token.py
+  --account <owner> --repos <name> --perm contents=read -- gh ...`); the
+  needs-Steve digest write is the standing exception (`--account smansf
+  --repos sofa-claude --perm issues=write`). There is no ambient fallback:
   if minting fails, that work stops and the cause goes to the needs-Steve
   digest; never retry under another credential, and never `gh auth
   login`. This repo requires no PAT of its own.

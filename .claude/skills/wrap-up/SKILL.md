@@ -5,6 +5,13 @@ description: End-of-session handoff — drain in-flight work, reconcile issue st
 
 # wrap-up
 
+Every `gh` call in this skill runs under a short-lived App token minted
+by the repo's credential helper — in a workload repo
+`python3 scripts/gh_token.py --account <owner> --repos <name>
+--perm <name=level> -- gh ...`; in sofa-claude itself the helper lives
+at `seed/scripts/gh_token.py` — never ambient session auth. Grant 4's
+regime has no ambient fallback.
+
 1. Drain or explicitly hand off any in-flight background work; nothing
    should be silently mid-air when the session ends.
 2. Reconcile GitHub state: every pushed `claude/*` branch has a PR; issues
@@ -22,7 +29,14 @@ description: End-of-session handoff — drain in-flight work, reconcile issue st
 4. Refresh the **body** of the needs-Steve digest issue — **always
    sofa-claude's own** (Issue #2 in smansf/sofa-claude), whatever repo
    the session ran in: the digest aggregates across repos, and workload
-   repos carry none of their own. Same `standing`-label guard: list only
+   repos carry none of their own. From a workload repo this is the one
+   write that leaves the repo's scope — mint for it explicitly:
+   `python3 scripts/gh_token.py --account smansf --repos sofa-claude
+   --perm issues=write --reason "needs-Steve digest" -- gh issue edit 2
+   --repo smansf/sofa-claude --body-file ...`. If that mint fails, the
+   App's smansf installation does not cover sofa-claude — put the digest
+   content in the recap for Steve instead of writing nothing silently.
+   Same `standing`-label guard: list only
    items genuinely blocked on Steve — pending merges/promotions, open grant
    decisions, halted runs — each with its paste-ready command where one
    applies (e.g. `/code-review high <PR URL> --comment`). An empty list is
