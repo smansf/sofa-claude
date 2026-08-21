@@ -58,25 +58,35 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    reports no data and fails, which is defect 2 recurring one step later,
    because the floor and the test run are the same command. Real module
    plus real test satisfies every floor shape.
-4. **Wire the repo**: create `dev` and `staging` from `main`; **set `dev`
-   as the default branch, then verify it stuck** (`gh repo view --json
-   defaultBranchRef` must say `dev` — if it doesn't, stop wiring and put
-   it in the needs-Steve digest, because unit auto-close and the expiry
-   record both silently lie until it's fixed). Unit issues then auto-close
-   when their PR merges to `dev`, and new PRs target `dev` by default.
+4. **Wire the repo**: run `wire_repo.py --repo OWNER/NAME --checkout .`
+   from this skill's directory. It creates `dev` and `staging`, sets `dev`
+   as the default branch, applies the `protect-main` / `protect-staging`
+   rulesets, and then **probes what GitHub actually enforces** — a no-op
+   fast-forward on each protected branch, refused if protection is real.
+   A 201 from the rulesets API is not protection; only the probe is. It
+   takes its credential from the repo's own `scripts/gh_token.py`, so it
+   stops if the seed copy is incomplete rather than wiring a repo whose
+   merge path could never authenticate. Exit 0 means everything that
+   should be protected is; **exit 5 means wired but NOT protected** —
+   normal on a private repo, since free-plan rulesets cover public repos
+   only and org-level rulesets need Enterprise. Exit 5 is never a pass:
+   copy its summary verbatim into the repo's CLAUDE.md **and** the
+   needs-Steve digest, and fill `{{ENFORCEMENT}}` in the seeded CLAUDE.md
+   from it, so the distinction between technical and process-only
+   enforcement outlives this session. Step 6's placeholder grep catches it
+   if you skip that. Exit 4 means nothing
+   was wired; fix the cause, do not proceed.
    **Disable "automatically delete head branches"**
    (`gh repo edit --delete-branch-on-merge=false`, then confirm with
    `gh repo view --json deleteBranchOnMerge`): a promotion PR's head *is*
    a long-lived branch, so the setting deletes `staging` the first time
    Steve promotes to `main`, and `merge_dev.py` already deletes unit
-   branches itself. **Expect this to 403** — repo administration is
-   outside the current token (sofa-claude Issue #14), so the normal
-   outcome is a needs-Steve digest entry with the exact click path
-   (Settings → General, ~15 s), not a repaired setting. Do not write it as
-   a standing bar the repo starts out violating: the seeded CLAUDE.md
-   carries the check at the moment it bites, holding the *first promotion*
-   until the setting is off. Branch protection also exempts a branch, but
-   is unavailable on private repos at this plan — never rely on it.
+   branches itself. The App can do this now — it holds repository
+   administration — so a 403 here is a real failure to investigate, not
+   the expected outcome it once was (sofa-claude Issue #14, closed).
+   Do not write it as a standing bar the repo starts out violating: the
+   seeded CLAUDE.md carries the check at the moment it bites, holding the
+   *first promotion* until the setting is off.
    Create labels `urgent`, `keep`,
    `standing`; create the standing handoff issue **labeled `standing`**
    (unlabeled, the repo's own expiry workflow will close it) and fill
@@ -97,10 +107,14 @@ Run this *from the workload repo's own directory*, never from sofa-claude.
    (`config.yml` with `blank_issues_enabled: false`), `.gitignore`, and
    `scripts/merge_dev.py` (its `REQUIRED_CHECKS` matching ci.yml's job
    names, its executable bit intact) and `scripts/gh_token.py` are all
-   present; **the credential path actually works** — mint a read-only
-   token for this repo and run one `gh` call under it, because the file
-   being present proves nothing about the repo being inside the App's
-   installation. A personal-account installation is scoped to selected
+   present; **the credential path actually works** — mint
+   `merge_dev.MERGE_PERMISSIONS` verbatim and run one `gh` call under it.
+   Not a read-only token, and not a hand-written subset: requesting a
+   permission the installation has not been granted 422s the *whole* mint,
+   so a narrower probe passes while the merge path is dead. The file being
+   present proves nothing about the repo being inside the App's
+   installation, and a green mint of the wrong permissions proves nothing
+   about the merge. A personal-account installation is scoped to selected
    repositories and a new repo is **not** added automatically; adding it
    needs a user-to-server token, so it is Steve's ceremony, not Claude's.
    A mint that fails here means the first unit will reach a green PR and

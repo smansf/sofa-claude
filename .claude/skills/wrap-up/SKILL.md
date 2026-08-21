@@ -11,10 +11,16 @@ description: End-of-session handoff — drain in-flight work, reconcile issue st
    touched this session reflect reality; anything discovered but not filed
    was *deliberately* dropped per the intake kill step (do not file a
    parting wave of findings — that is the legacy failure mode).
-3. Overwrite the **body** of Issue #1 with: current state, in-flight PRs,
-   the next session's starting point. Append nothing; the body is the whole
-   handoff.
-4. Refresh the **body** of Issue #2 (needs-Steve digest): list only items
+3. Overwrite the **body** of the handoff issue named in **this repo's**
+   CLAUDE.md — in sofa-claude that is Issue #1, in a workload repo it is
+   whatever bootstrap filled in. **Confirm it carries `standing` before
+   writing**, and stop if it does not: overwriting a body is destructive
+   and there is no comment log to recover from, so writing to a guessed
+   number would silently destroy someone's unrelated issue. Content:
+   current state, in-flight PRs, the next session's starting point.
+   Append nothing; the body is the whole handoff.
+4. Refresh the **body** of the needs-Steve digest issue (Issue #2 in
+   sofa-claude), under the same `standing`-label guard: list only items
    genuinely blocked on Steve — pending merges/promotions, open grant
    decisions, halted runs — each with its paste-ready command where one
    applies (e.g. `/code-review high <PR URL> --comment`). An empty list is

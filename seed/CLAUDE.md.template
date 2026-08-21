@@ -40,8 +40,14 @@ refreshes it.
   deletes `staging`. If it reports `true` the promotion waits: it is a
   needs-Steve item (Settings → General, ~15 s), and `scripts/merge_dev.py`
   already deletes unit branches itself, so nothing here needs the setting.
-  Protected `staging`/`main` are exempt, but branch protection is not
-  available on private repos at this plan — do not rely on it.
+  Protected `staging`/`main` are exempt from that deletion, but see the
+  next line before assuming they are protected at all.
+- **Branch protection in this repo: {{ENFORCEMENT}}** — filled at bootstrap
+  from `wire_repo.py`'s probe, which tests what GitHub refuses rather than
+  what its API accepted. Free-plan rulesets cover **public** repos only, so
+  a private repo is wired but unprotected and the human-only merge rule on
+  `staging`/`main` rests on process alone. Whichever this repo got, it is
+  recorded here so the distinction outlives the session that made it.
 - Deploy wiring lives in Steve's Vercel account; Claude holds no Vercel
   credentials. Claude never merges to `staging` or `main`.
 - Scripted GitHub access — `scripts/merge_dev.py` today — takes its
