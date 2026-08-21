@@ -129,10 +129,17 @@ breaks the day the PAT is gone.
    `scripts/merge_dev.py` (its `REQUIRED_CHECKS` matching ci.yml's job
    names, its executable bit intact) and `scripts/gh_token.py` are all
    present; **the credential path actually works** — mint
-   `merge_dev.MERGE_PERMISSIONS` verbatim and run one `gh` call under it.
-   Not a read-only token, and not a hand-written subset: requesting a
-   permission the installation has not been granted 422s the *whole* mint,
-   so a narrower probe passes while the merge path is dead. The file being
+   `merge_dev.INSPECT_PERMISSIONS` and `merge_dev.MERGE_PERMISSIONS`,
+   each verbatim, and run one `gh` call under each. Two mints because
+   the runtime is two-phase: every real run inspects under the read set
+   (checks/statuses/actions) before any write token exists, so verifying
+   only the merge set waves through an installation missing the inspect
+   grants — the first unit then reaches a green PR and dies at the
+   inspect mint. Not read-only probes of convenience, and not
+   hand-written subsets: requesting a permission the installation has
+   not been granted 422s the *whole* mint, so each verbatim set proves
+   exactly its phase, and a narrower probe would pass while the real
+   path is dead. The file being
    present proves nothing about the repo being inside the App's
    installation, and a green mint of the wrong permissions proves nothing
    about the merge. A personal-account installation is scoped to selected

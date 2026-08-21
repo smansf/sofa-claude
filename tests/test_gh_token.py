@@ -22,8 +22,11 @@ gh_token = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(gh_token)
 
 
-def _mint(*args, **kwargs):
+def _mint(*args, _granted=None, **kwargs):
     """Call mint() with the network stubbed; return (token, captured_body).
+
+    The fake echoes the requested permissions back as granted, the way
+    GitHub does; pass `_granted` to model a mismatched grant instead.
 
     SOFA_AUDIT_LOG is pinned to a temporary file: the real log is Grant 4's
     detection control, and a test suite forging entries into it is worse
@@ -37,7 +40,10 @@ def _mint(*args, **kwargs):
             return [{"id": 42, "account": {"login": "warblersafety"}}]
         captured["path"] = path
         captured["payload"] = payload
-        return {"token": "ghs_stub", "expires_at": "2026-08-21T00:00:00Z"}
+        granted = (_granted if _granted is not None
+                   else dict(payload["permissions"]))
+        return {"token": "ghs_stub", "expires_at": "2026-08-21T00:00:00Z",
+                "permissions": granted}
 
     with tempfile.TemporaryDirectory() as tmp:
         with mock.patch.dict(os.environ,
@@ -138,6 +144,40 @@ class ElevationTests(unittest.TestCase):
         self.assertIn("apply protect-main ruleset", stderr.getvalue())
         self.assertNotIn(token, stderr.getvalue(),
                          "the announcement must never carry the credential")
+
+
+class GrantVerificationTests(unittest.TestCase):
+    """A 2xx is not a grant (recovered review, PR #34): a token granted
+    short reads downstream as silently missing data — a rollup with
+    nodes omitted misreported as 'absent' — and one granted broad is not
+    least privilege. mint() checks what GitHub says it granted."""
+
+    def test_short_grant_is_refused(self):
+        with self.assertRaises(gh_token.TokenError) as caught:
+            _mint("warblersafety", ["scratch"],
+                  {"checks": "read", "actions": "read"},
+                  _granted={"checks": "read"})
+        message = str(caught.exception)
+        self.assertIn("different permission set", message)
+        self.assertIn("actions", message)
+
+    def test_broad_grant_is_refused(self):
+        with self.assertRaises(gh_token.TokenError):
+            _mint("warblersafety", ["scratch"], {"contents": "read"},
+                  _granted={"contents": "read", "issues": "write"})
+
+    def test_wrong_level_is_refused(self):
+        with self.assertRaises(gh_token.TokenError):
+            _mint("warblersafety", ["scratch"], {"contents": "read"},
+                  _granted={"contents": "write"})
+
+    def test_implicit_metadata_read_is_tolerated(self):
+        """GitHub attaches metadata:read to every installation token."""
+        (token, _), _ = _mint("warblersafety", ["scratch"],
+                              {"contents": "read"},
+                              _granted={"contents": "read",
+                                        "metadata": "read"})
+        self.assertEqual(token, "ghs_stub")
 
 
 class TransportTests(unittest.TestCase):
@@ -289,6 +329,12 @@ class FailClosedScopeTests(unittest.TestCase):
     """Fail closed where the control lives; do not outage routine work."""
 
     def _mint_with_unwritable_log(self, permissions, reason=None):
+        def fake_api(path, bearer, method="GET", payload=None):
+            if path.startswith("/app/installations?"):
+                return [{"id": 1, "account": {"login": "o"}}]
+            return {"token": "ghs_stub", "expires_at": "later",
+                    "permissions": dict(payload["permissions"])}
+
         with tempfile.TemporaryDirectory() as tmp:
             blocker = pathlib.Path(tmp) / "blocked"
             blocker.write_text("not a directory")
@@ -296,12 +342,7 @@ class FailClosedScopeTests(unittest.TestCase):
                                  {"SOFA_AUDIT_LOG": str(blocker / "log")}), \
                  mock.patch.object(sys, "stderr", io.StringIO()) as err, \
                  mock.patch.object(gh_token, "app_jwt", lambda *a, **k: "jwt"), \
-                 mock.patch.object(
-                     gh_token, "api",
-                     lambda path, *a, **k: (
-                         [{"id": 1, "account": {"login": "o"}}]
-                         if path.startswith("/app/installations?")
-                         else {"token": "ghs_stub", "expires_at": "later"})):
+                 mock.patch.object(gh_token, "api", fake_api):
                 return gh_token.mint("o", ["r"], permissions, reason=reason,
                                      app_id="1", key_path="/dev/null"), err.getvalue()
 

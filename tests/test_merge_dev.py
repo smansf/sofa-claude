@@ -152,15 +152,27 @@ class NamespaceTests(unittest.TestCase):
         blockers = blockers_of(pr(statusCheckRollup=rollup), [REVIEW])
         self.assertTrue(any("'test'" in b and "absent" in b for b in blockers))
 
+    def test_cross_enum_agreement_is_not_a_disagreement(self):
+        """NEUTRAL (a CheckRun conclusion) and SUCCESS (a status state)
+        are different enums agreeing on 'good' — raw string inequality
+        must not refuse them as two verdicts."""
+        rollup = list(GREEN) + [
+            {"__typename": "CheckRun", "name": "extra",
+             "conclusion": "NEUTRAL"},
+            {"__typename": "StatusContext", "context": "extra",
+             "state": "SUCCESS"}]
+        self.assertEqual(merge_dev.evaluate(pr(statusCheckRollup=rollup),
+                                            [REVIEW]), ([], []))
+
 
 class PendingTests(unittest.TestCase):
     """A running check is not a failing one (Issue #31)."""
 
     def test_pending_commit_status_is_pending_not_failing(self):
         rollup = GREEN + [{"context": "vercel — preview", "state": "PENDING"}]
-        blockers, pending = merge_dev.evaluate(pr(statusCheckRollup=rollup),
-                                               [REVIEW])
-        self.assertEqual(blockers, [])
+        self.assertEqual(blockers_of(pr(statusCheckRollup=rollup), [REVIEW]),
+                         [])
+        pending = pending_of(pr(statusCheckRollup=rollup), [REVIEW])
         self.assertTrue(any("vercel — preview" in p for p in pending), pending)
         self.assertFalse(any("Failing" in p for p in pending))
 
@@ -180,10 +192,36 @@ class PendingTests(unittest.TestCase):
         rollup = [c for c in GREEN if c["name"] != "test"]
         rollup.append({"__typename": "CheckRun", "name": "test",
                        "conclusion": None, "status": "IN_PROGRESS"})
-        blockers, pending = merge_dev.evaluate(pr(statusCheckRollup=rollup),
-                                               [REVIEW])
-        self.assertEqual(blockers, [])
+        self.assertEqual(blockers_of(pr(statusCheckRollup=rollup), [REVIEW]),
+                         [])
+        pending = pending_of(pr(statusCheckRollup=rollup), [REVIEW])
         self.assertTrue(any("'test'" in p and "running" in p for p in pending))
+
+    def test_running_run_beside_decided_status_is_not_two_verdicts(self):
+        """Recovered review, PR #34: a required CheckRun mid-flight next
+        to a same-named SUCCESS status was refused as 'two verdicts' —
+        but a node that has not finished holds no verdict yet."""
+        rollup = [c for c in GREEN if c["name"] != "test"]
+        rollup.append({"__typename": "CheckRun", "name": "test",
+                       "conclusion": None, "status": "IN_PROGRESS"})
+        rollup.append({"__typename": "StatusContext", "context": "test",
+                       "state": "SUCCESS"})
+        self.assertEqual(blockers_of(pr(statusCheckRollup=rollup), [REVIEW]),
+                         [])
+        pending = pending_of(pr(statusCheckRollup=rollup), [REVIEW])
+        self.assertTrue(any("'test'" in p and "running" in p
+                            for p in pending), pending)
+
+    def test_pending_status_behind_decided_required_check_stays_visible(self):
+        """The reverse collision: a SUCCESS run + PENDING status sharing
+        a required name previously blocked as a disagreement AND hid the
+        pending fact; it is simply not decided yet."""
+        rollup = list(GREEN) + [{"__typename": "StatusContext",
+                                 "context": "lint", "state": "PENDING"}]
+        self.assertEqual(blockers_of(pr(statusCheckRollup=rollup), [REVIEW]),
+                         [])
+        pending = pending_of(pr(statusCheckRollup=rollup), [REVIEW])
+        self.assertTrue(any("lint" in p for p in pending), pending)
 
     def test_pending_only_exits_5_and_merges_nothing(self):
         rollup = GREEN + [{"context": "vercel — preview", "state": "PENDING"}]
@@ -331,6 +369,14 @@ class PermissionDerivationTests(unittest.TestCase):
         self.assertEqual(rollup.get("checks"), "read")
         self.assertEqual(rollup.get("statuses"), "read")
         self.assertEqual(rollup.get("actions"), "read")
+
+    def test_every_query_field_is_classified_for_null_handling(self):
+        """The nullable-field list is derived, not hand-asserted — the
+        next field added to FIELDS must fail here until classified."""
+        self.assertEqual(set(merge_dev.FIELD_NULL_MEANS_UNRESOLVED),
+                         set(merge_dev.FIELDS))
+        self.assertEqual(set(merge_dev.UNRESOLVED_NULL_FIELDS),
+                         {"statusCheckRollup", "comments"})
 
 
 class CredentialTests(unittest.TestCase):

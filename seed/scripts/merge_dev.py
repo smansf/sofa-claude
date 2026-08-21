@@ -72,6 +72,24 @@ FIELD_PERMISSIONS = {
     "comments": {"pull_requests": "read"},
 }
 
+# Whether gh reports the field as null when the token cannot resolve it,
+# rather than failing the whole query: true for the connection-backed
+# fields, false for the four scalars that ride on the pull_requests read
+# the query itself needs (present whenever the query succeeds at all).
+# Every FIELDS entry must be classified — the derivation below KeyErrors
+# on an unclassified field, for the same reason INSPECT_PERMISSIONS is
+# derived rather than hand-asserted (Issue #30).
+FIELD_NULL_MEANS_UNRESOLVED = {
+    "isDraft": False,
+    "state": False,
+    "baseRefName": False,
+    "headRefName": False,
+    "statusCheckRollup": True,
+    "comments": True,
+}
+UNRESOLVED_NULL_FIELDS = tuple(
+    f for f in FIELDS if FIELD_NULL_MEANS_UNRESOLVED[f])
+
 # Two phases, deliberately. Reading a PR to decide whether it may merge
 # needs nothing writable, so a refused PR never has a merge-capable
 # credential in the room at all. The write token is minted only once
@@ -133,6 +151,19 @@ PENDING_STATES = {"PENDING", "EXPECTED", "QUEUED", "IN_PROGRESS",
                   "WAITING", ""}
 
 
+def _verdict(raw):
+    """Collapse a raw node state to 'good', 'bad', or None while pending.
+
+    CheckRun conclusions and StatusContext states are different enums
+    sharing only a few members, so comparing them raw calls NEUTRAL
+    versus SUCCESS a conflict; and a node that has not finished holds no
+    verdict at all — pending must never be read as one (Issue #31).
+    """
+    if raw in PENDING_STATES:
+        return None
+    return "good" if raw in GOOD_CONCLUSIONS else "bad"
+
+
 def _split_rollup(rollup):
     """Separate CheckRun and StatusContext nodes into their own maps.
 
@@ -185,9 +216,13 @@ def evaluate(pr, comment_bodies):
     check_runs, contexts = _split_rollup(pr.get("statusCheckRollup"))
     # One name carrying two disagreeing verdicts is refused outright —
     # the alternative is the merge decision depending on node order in
-    # the rollup, silently (Issue #28).
+    # the rollup, silently (Issue #28). Compared through _verdict, not
+    # raw strings: a still-running node has not disagreed with anything.
+    def _disagrees(name):
+        a, b = _verdict(check_runs[name]), _verdict(contexts[name])
+        return a is not None and b is not None and a != b
     disagreeing = sorted(n for n in set(check_runs) & set(contexts)
-                         if check_runs[n] != contexts[n])
+                         if _disagrees(n))
     if disagreeing:
         blockers.append(
             "One name, two verdicts: " + ", ".join(disagreeing) + " — a "
@@ -209,17 +244,21 @@ def evaluate(pr, comment_bodies):
         elif check_runs[req] != "SUCCESS":
             blockers.append(f"Required check {req!r} is "
                             f"{check_runs[req] or 'UNKNOWN'}, not SUCCESS.")
-    merged_view = dict(contexts)
-    merged_view.update(check_runs)  # disagreements were refused above
-    others = {n: s for n, s in merged_view.items()
-              if n not in REQUIRED_CHECKS}
-    pending_others = sorted(n for n, s in others.items()
-                            if s in PENDING_STATES)
+    # Everything else — non-required check runs, plus every commit
+    # status (a status never IS a required check, even sharing the name;
+    # Issue #28) — is judged per node. The old single merged view let a
+    # decided check run hide a same-named status still mid-flight
+    # (recovered review, PR #34). A failing status on a required name
+    # stays out of bad_others: decided disagreements were refused above
+    # and a failing required run is already blocked by name.
+    others = [(n, s) for n, s in check_runs.items()
+              if n not in REQUIRED_CHECKS] + list(contexts.items())
+    bad_others = sorted({n for n, s in others if _verdict(s) == "bad"
+                         and n not in REQUIRED_CHECKS})
+    pending_others = sorted({n for n, s in others
+                             if _verdict(s) is None} - set(bad_others))
     if pending_others:
         pending.append("Still running: " + ", ".join(pending_others))
-    bad_others = sorted(n for n, s in others.items()
-                        if s not in GOOD_CONCLUSIONS
-                        and s not in PENDING_STATES)
     if bad_others:
         blockers.append("Failing checks: " + ", ".join(bad_others))
     if not any((body or "").lstrip().startswith(REVIEW_MARKER)
@@ -279,11 +318,13 @@ def main(argv):
     except subprocess.CalledProcessError as err:
         return _transport_failure(err)
     # A field that did not resolve is a permission gap, not a state of
-    # the PR: statusCheckRollup null or comments missing means the token
-    # could not see them, and "could not see" must never be reported as
-    # "absent is not green" or "no reviewer pass" (Issue #29).
-    unresolved = [f for f in ("statusCheckRollup", "comments")
-                  if pr.get(f) is None]
+    # the PR: null means the token could not see it, and "could not see"
+    # must never be reported as "absent is not green" or "no reviewer
+    # pass" (Issue #29). mint() refuses a token GitHub grants short of
+    # the request (gh_token.py), so a rollup that resolved non-null is
+    # complete — required checks missing from it are genuinely absent,
+    # never silently omitted.
+    unresolved = [f for f in UNRESOLVED_NULL_FIELDS if pr.get(f) is None]
     if unresolved:
         return _credential_failure(
             "The inspect token could not resolve "
