@@ -40,17 +40,28 @@ refreshes it.
   deletes `staging`. If it reports `true` the promotion waits: it is a
   needs-Steve item (Settings → General, ~15 s), and `scripts/merge_dev.py`
   already deletes unit branches itself, so nothing here needs the setting.
-  Protected `staging`/`main` are exempt, but branch protection is not
-  available on private repos at this plan — do not rely on it.
+  Protected `staging`/`main` are exempt from that deletion, but see the
+  next line before assuming they are protected at all.
+- **Branch protection in this repo: {{ENFORCEMENT}}** — filled at bootstrap
+  from `wire_repo.py`'s verification of both paths: a direct push must be
+  refused *by rules*, and the rules GitHub reports as applying must gate
+  merges on at least one approving human review (zero required approvals
+  requires a PR, not a human). Free-plan rulesets cover **public** repos
+  only, so a private repo is wired but unprotected and the human-only merge
+  rule on `staging`/`main` rests on process alone. Whichever this repo got,
+  it is recorded here so the distinction outlives the session that made it.
 - Deploy wiring lives in Steve's Vercel account; Claude holds no Vercel
   credentials. Claude never merges to `staging` or `main`.
-- Scripted GitHub access — `scripts/merge_dev.py` today — takes its
-  credential from `scripts/gh_token.py`: a short-lived App token scoped to
-  this repo and to the permissions that task needs. If minting fails, that
-  work stops and the cause goes to the needs-Steve digest; never retry
-  under another credential, and never `gh auth login`. Interactive `gh`
-  still runs on the session's ambient auth until sofa-claude #23 lands.
-  This repo requires no PAT of its own.
+- Every GitHub call from this repo — `scripts/merge_dev.py`, or a
+  session's own `gh` — runs under a short-lived App token minted by
+  `scripts/gh_token.py`, scoped to the repositories and permissions the
+  task actually touches — usually this repo (`python3 scripts/gh_token.py
+  --account <owner> --repos <name> --perm contents=read -- gh ...`); the
+  needs-Steve digest write is the standing exception (`--account smansf
+  --repos sofa-claude --perm issues=write`). There is no ambient fallback:
+  if minting fails, that work stops and the cause goes to the needs-Steve
+  digest; never retry under another credential, and never `gh auth
+  login`. This repo requires no PAT of its own.
 - Promote often: a `dev` far ahead of `staging` makes promotion scary
   instead of routine. Claude flags when the gap exceeds ~10 units.
 
