@@ -37,7 +37,11 @@ the artifact — and must not read any other review's findings first.
 
 For a design record, Context must quote the charter's review-depth
 conclusion and end condition and list the record's own claimed risks —
-a bland Context is a defective review, not a compliant one.
+a bland Context is a defective review, not a compliant one. Also attack
+non-load-bearing content directly, under (1): a section that restates
+the charter, pads architecture rationale, or hedges every risk without
+a decision attached is the loophole a no-page-cap rule depends on
+closing, and it has no other named attacker.
 
 ## After
 
