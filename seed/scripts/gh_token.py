@@ -210,6 +210,9 @@ def mint(account, repositories, permissions, reason=None, app_id=None,
          key_path=None, _allow_org_level=False):
     """Return (token, expires_at) carrying exactly `permissions` on `repositories`.
 
+    "Exactly" is checked against what GitHub reports granting, not
+    assumed from a 2xx; a mismatched grant refuses instead of returning.
+
     Both scoping arguments are required and must be non-empty: there is
     deliberately no way to ask for everything the installation can do.
     Org-level permissions are rejected here -- they cannot be bounded by
@@ -267,6 +270,24 @@ def mint(account, repositories, permissions, reason=None, app_id=None,
     result = api(f"/app/installations/{installation_id(account, jwt)}/access_tokens",
                  jwt, "POST",
                  {"repositories": list(repositories), "permissions": dict(permissions)})
+    # "Carrying exactly `permissions`" is verified, not assumed: GitHub
+    # normally 422s a request the installation cannot grant, but a token
+    # granted short would read downstream as silently missing data (a
+    # rollup with nodes omitted misreported as "absent"), and one granted
+    # broad is not least privilege. metadata:read is tolerated — GitHub
+    # attaches it to every installation token implicitly.
+    granted = result.get("permissions") or {}
+    short = {n: l for n, l in permissions.items() if granted.get(n) != l}
+    extra = {n: l for n, l in granted.items()
+             if n not in permissions and (n, l) != ("metadata", "read")}
+    if short or extra:
+        raise TokenError(
+            f"GitHub granted a different permission set than requested "
+            f"(requested {dict(permissions)!r}, granted {granted!r}). A "
+            f"token carrying other than what was named must not be used. "
+            f"Fix the installation's grants (App → Install → this "
+            f"repository) and re-run; do not proceed on an unverified "
+            f"surface.")
     if recorded:
         try:
             record_elevation(account, repositories, permissions, reason or "",
