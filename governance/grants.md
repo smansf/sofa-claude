@@ -33,10 +33,10 @@ preconditions: this grant is **dormant until its rails exist as merged code**.
 
 - Unattended first line: a merge to `dev` requires a green CI run plus a
   fresh-context reviewer subagent pass, invoked by Claude, at model/effort
-  matching the repo's declared stakes tier, **posted as a comment on the PR
-  before the merge — no comment, no merge**, so the pass leaves an artifact
-  a later audit can check. One round; findings follow the intake rule
-  (decisions/0002).
+  matching the charter's stated review-depth conclusion, **posted as a
+  comment on the PR before the merge — no comment, no merge**, so the pass
+  leaves an artifact a later audit can check. One round; findings follow
+  the intake rule (decisions/0002).
 - Attended first line: at promotions (`dev → staging`, `staging → main`)
   Claude prepares the promotion PR and hands Steve the exact command —
   `/code-review <effort> <PR URL> --comment` — in the PR body and the
