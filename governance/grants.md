@@ -79,14 +79,62 @@ then the PAT rules stand and this grant is inert.
   account remain Steve's ceremonies, forbidden to Claude like every other
   credential-granting flow.
 
+- **Name each part of the path precisely.** The credential broker is
+  `seed/scripts/gh_token.py` in the `smansf/sofa-claude` repository. It runs
+  on the mini as the `sofa-claude` macOS account and uses that account's
+  private key for the `sofa-claude-ops` GitHub App. The repository, local
+  account, App, and broker are distinct things; shorthand must not blur them.
+
+- **There is one GitHub path.** The broker is the only credential authority;
+  `gh` is the only API client, and `git` over HTTPS is the only repository
+  transport, authenticated through `gh auth git-credential` under the same
+  short-lived App token. `git` is transport, not a second identity. The
+  broker's own call that mints an installation token is the sole direct
+  GitHub API exception. Personal tokens or accounts, SSH, browser automation,
+  connectors, and raw-API fallbacks are not alternatives when this path
+  fails.
+
 - **Least privilege is the sanctioned mint path.** Every token names the
   repositories it touches and the permissions it needs, and carries
-  nothing else. `seed/scripts/gh_token.py` refuses to mint without both.
+  nothing else. `seed/scripts/gh_token.py` refuses to mint without both. Its
+  fixed `read` profile permits task-relevant research across any repositories
+  already available to the App, provided the caller names every repository;
+  it does not expand the App installation. Write tokens remain limited to the
+  repository and permissions required by the approved work.
   This is a paved path, not a wall: the capability is the private key, and
   anything holding the key can sign a JWT and request everything the
   installation allows. The helper constrains the process's own conduct —
   it is not a boundary an actor outside the process is held by, and this
   grant does not pretend otherwise (decisions/0001).
+
+- **Operation authority is explicit without freezing GitHub's vocabulary.**
+  Read-only research may cross repositories already available to the App when
+  it informs the task. Routine delivery writes stay in the active approved
+  repository and include issue, comment, label, and milestone management;
+  branch pushes; pull-request creation and management; review requests,
+  comments, readiness, and conversation resolution; approved workflow-file
+  edits; and check inspection. A squash merge is routine only after Steve's
+  required GitHub approval and all repository gates pass. Cross-repository
+  writes; Actions dispatch, rerun, or cancellation; release creation,
+  editing, publishing, deletion, or asset management; and deployment or
+  environment operations each require separate, explicit authorization.
+  Installing the App or widening its repositories or permissions; repository
+  creation, deletion, transfer, archiving, or visibility changes; branch
+  protections, rulesets, collaborators, or default-branch changes; secrets,
+  keys, webhooks, or billing; approving as Steve; and force or bypass actions
+  remain human-only. The broker's contained repository-creation interface is
+  retained for bootstrap, but invoking it requires Steve's explicit ceremony
+  and is not standing delivery authority.
+
+- **Failure is evidence, not permission to route around the system.** Preserve
+  the exact failure and diagnose its root cause. Never change identity,
+  credential, client, transport, repository scope, token permissions, or
+  protections merely to make an operation succeed. A locally malformed
+  invocation may be corrected after it is identified when the intended
+  operation and all authority remain unchanged. A clearly transient network
+  or GitHub-service failure may receive one identical retry; there is no
+  automatic retry or fallback. Otherwise, repair the canonical path within
+  the existing authority or stop and take the root cause to Steve.
 
 - **What scoping does and does not bound.** A token's `repositories` list
   bounds **repository-level** permissions only. **Organization-level**

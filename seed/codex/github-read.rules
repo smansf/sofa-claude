@@ -1,0 +1,23 @@
+# Install as a trusted project-local Codex rule after this broker version is
+# merged and synced. The broker fixes read permissions, requires explicit
+# repository names, and admits only gh or HTTPS git.
+prefix_rule(
+    pattern = [
+        "env",
+        "SOFA_APP_ID=4665307",
+        "python3",
+        "/Users/sofa-claude/code/sofa-claude/seed/scripts/gh_token.py",
+        "--profile",
+        "read",
+    ],
+    decision = "allow",
+    justification = "Read-only GitHub access through the canonical App-token broker",
+    match = [
+        "env SOFA_APP_ID=4665307 python3 /Users/sofa-claude/code/sofa-claude/seed/scripts/gh_token.py --profile read --account warblersafety --repos wilson-next -- gh pr view 12",
+        "env SOFA_APP_ID=4665307 python3 /Users/sofa-claude/code/sofa-claude/seed/scripts/gh_token.py --profile read --account warblersafety --repos wilson-next,wilson -- gh issue view 7 --repo warblersafety/wilson",
+    ],
+    not_match = [
+        "env SOFA_APP_ID=4665307 python3 /Users/sofa-claude/code/sofa-claude/seed/scripts/gh_token.py --account warblersafety --repos wilson-next --perm contents=read -- gh pr list",
+        "gh pr view 12 --repo warblersafety/wilson-next",
+    ],
+)

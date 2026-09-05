@@ -251,7 +251,7 @@ class OrgLevelTests(unittest.TestCase):
     def _create(self, **over):
         seen = {}
 
-        def fake_mint(account, repositories, permissions, **kwargs):
+        def fake_mint(account, repositories, permissions, *args, **kwargs):
             seen["repositories"] = repositories
             seen["permissions"] = permissions
             seen["allow"] = kwargs.get("_allow_org_level")
@@ -384,6 +384,127 @@ class NoCredentialLeakTests(unittest.TestCase):
         self.assertEqual(captured["command"], ["gh", "pr", "list"])
         self.assertEqual(captured["env"]["GH_TOKEN"], "ghs_secret")
         self.assertNotIn("ghs_secret", " ".join(captured["command"]))
+
+    def test_read_profile_is_fixed_and_cannot_be_combined_with_permissions(self):
+        captured = {}
+
+        def fake_mint(account, repositories, permissions, *args, **kwargs):
+            captured.update(account=account, repositories=repositories,
+                            permissions=permissions)
+            return "ghs_secret", "later"
+
+        with mock.patch.object(gh_token, "mint", fake_mint), \
+             mock.patch.object(gh_token.subprocess, "run",
+                               return_value=subprocess.CompletedProcess(["gh"], 0)):
+            code = gh_token.main(["--profile", "read", "--account", "warblersafety",
+                                  "--repos", "wilson-next,wilson", "--",
+                                  "gh", "repo", "view"])
+        self.assertEqual(code, 0)
+        self.assertEqual(captured["repositories"], ["wilson-next", "wilson"])
+        self.assertEqual(captured["permissions"], gh_token.READ_PROFILE_PERMISSIONS)
+        self.assertTrue(all(level == "read"
+                            for level in captured["permissions"].values()))
+
+        with mock.patch.object(sys, "stderr", io.StringIO()), \
+             self.assertRaises(SystemExit):
+            gh_token.main(["--profile", "read", "--perm", "contents=write",
+                           "--account", "warblersafety", "--repos", "wilson-next",
+                           "--", "gh", "repo", "view"])
+
+    def test_only_gh_and_git_are_supported_children(self):
+        for command in (["gh", "issue", "list"], ["git", "fetch", "origin"],
+                        ["gh", "issue", "create", "--body", "auth"]):
+            with self.subTest(command=command):
+                self.assertEqual(gh_token.validate_child_command(command), command)
+
+        for command in (["curl", "https://api.github.com"], ["env"], ["python3"]):
+            with self.subTest(command=command), \
+                 self.assertRaises(gh_token.TokenError) as caught:
+                gh_token.validate_child_command(command)
+            self.assertIn("supported", str(caught.exception))
+
+    def test_arbitrary_child_is_refused_before_minting(self):
+        mint = mock.Mock()
+        with mock.patch.object(gh_token, "mint", mint), \
+             mock.patch.object(sys, "stderr", io.StringIO()):
+            code = gh_token.main(["--profile", "read", "--account", "warblersafety",
+                                  "--repos", "wilson-next", "--", "env"])
+        self.assertEqual(code, 2)
+        mint.assert_not_called()
+
+    def test_credential_exposure_and_client_reconfiguration_are_refused(self):
+        refused = (["gh", "auth", "token"], ["gh", "alias", "set", "leak", "!env"],
+                   ["gh", "config", "set", "git_protocol", "ssh"],
+                   ["gh", "extension", "exec", "anything"],
+                   ["git", "credential", "fill"],
+                   ["git", "config", "credential.helper", "!env"],
+                   ["git", "-c", "alias.leak=!env", "leak"])
+        for command in refused:
+            with self.subTest(command=command), \
+                 self.assertRaises(gh_token.TokenError) as caught:
+                gh_token.validate_child_command(command)
+            self.assertIn("outside the token broker", str(caught.exception))
+
+        with self.assertRaises(gh_token.TokenError) as caught:
+            gh_token.validate_child_command(
+                ["git", "ls-remote", "git@github.com:warblersafety/wilson-next.git"])
+        self.assertIn("Only HTTPS", str(caught.exception))
+
+    def test_child_environment_disables_credential_and_transport_fallbacks(self):
+        captured = {}
+
+        def fake_run(command, env=None):
+            captured.update(command=command, env=env)
+            return subprocess.CompletedProcess(command, 0)
+
+        inherited = {"GH_TOKEN": "personal", "GITHUB_TOKEN": "personal",
+                     "GH_ENTERPRISE_TOKEN": "enterprise",
+                     "GITHUB_ENTERPRISE_TOKEN": "enterprise",
+                     "GH_CONFIG_DIR": "/personal/config"}
+        with mock.patch.dict(os.environ, inherited, clear=True), \
+             mock.patch.object(gh_token, "mint",
+                               lambda *a, **k: ("ghs_installation", "later")), \
+             mock.patch.object(gh_token.subprocess, "run", fake_run):
+            code = gh_token.main(["--profile", "read", "--account", "warblersafety",
+                                  "--repos", "wilson-next", "--", "git", "fetch"])
+        self.assertEqual(code, 0)
+        self.assertEqual(captured["env"]["GH_TOKEN"], "ghs_installation")
+        self.assertEqual(captured["env"]["GITHUB_TOKEN"], "ghs_installation")
+        self.assertNotIn("GH_ENTERPRISE_TOKEN", captured["env"])
+        self.assertNotIn("GITHUB_ENTERPRISE_TOKEN", captured["env"])
+        self.assertEqual(captured["env"]["GH_HOST"], "github.com")
+        self.assertEqual(captured["env"]["GIT_TERMINAL_PROMPT"], "0")
+        self.assertEqual(captured["env"]["GCM_INTERACTIVE"], "never")
+        self.assertEqual(captured["env"]["GIT_SSH_COMMAND"], "false")
+        self.assertEqual(captured["env"]["GIT_ALLOW_PROTOCOL"], "https")
+        self.assertEqual(captured["env"]["GIT_CONFIG_COUNT"], "2")
+        self.assertEqual(captured["env"]["GIT_CONFIG_KEY_0"],
+                         "credential.helper")
+        self.assertEqual(captured["env"]["GIT_CONFIG_VALUE_0"], "")
+        self.assertEqual(captured["env"]["GIT_CONFIG_KEY_1"],
+                         "credential.helper")
+        self.assertEqual(captured["env"]["GIT_CONFIG_VALUE_1"],
+                         "!/Users/sofa-claude/bin/gh auth git-credential")
+        self.assertEqual(captured["env"]["GH_PROMPT_DISABLED"], "1")
+        self.assertEqual(captured["env"]["GH_NO_UPDATE_NOTIFIER"], "1")
+        self.assertIn("GH_CONFIG_DIR", captured["env"])
+        self.assertNotEqual(captured["env"]["GH_CONFIG_DIR"], "/personal/config")
+
+    def test_failed_child_surfaces_once_without_retry_or_fallback(self):
+        run = mock.Mock(return_value=subprocess.CompletedProcess(["gh"], 17))
+        stderr = io.StringIO()
+        with mock.patch.object(gh_token, "mint",
+                               lambda *a, **k: ("ghs_secret", "later")), \
+             mock.patch.object(gh_token.subprocess, "run", run), \
+             mock.patch.object(sys, "stderr", stderr):
+            code = gh_token.main(["--profile", "read", "--account", "warblersafety",
+                                  "--repos", "wilson-next", "--", "gh", "pr", "list"])
+        self.assertEqual(code, 17)
+        run.assert_called_once()
+        message = stderr.getvalue()
+        self.assertIn("CANONICAL GITHUB OPERATION FAILED", message)
+        self.assertIn("do not retry with", message.lower())
+        self.assertIn("root cause", message.lower())
 
 
 class ArgumentTests(unittest.TestCase):

@@ -52,16 +52,18 @@ refreshes it.
   it is recorded here so the distinction outlives the session that made it.
 - Deploy wiring lives in Steve's Vercel account; Claude holds no Vercel
   credentials. Claude never merges to `staging` or `main`.
-- Every GitHub call from this repo — `scripts/merge_dev.py`, or a
-  session's own `gh` — runs under a short-lived App token minted by
-  `scripts/gh_token.py`, scoped to the repositories and permissions the
-  task actually touches — usually this repo (`python3 scripts/gh_token.py
-  --account <owner> --repos <name> --perm contents=read -- gh ...`); the
-  needs-Steve digest write is the standing exception (`--account smansf
-  --repos sofa-claude --perm issues=write`). There is no ambient fallback:
-  if minting fails, that work stops and the cause goes to the needs-Steve
-  digest; never retry under another credential, and never `gh auth
-  login`. This repo requires no PAT of its own.
+- Every GitHub operation uses the credential broker
+  `scripts/gh_token.py`: `gh` is the API client and `git` over HTTPS is the
+  repository transport, both under one short-lived `sofa-claude-ops` App
+  token. Name every repository touched. Use the fixed read profile for
+  task-relevant reads across repositories already available to the App
+  (`python3 scripts/gh_token.py --profile read --account <owner> --repos
+  <name>[,<name>] -- gh ...`) and exact permissions for approved writes. The
+  needs-Steve digest write remains `--account smansf --repos sofa-claude
+  --perm issues=write`. Never use a PAT, personal account, SSH, raw API,
+  browser, or connector as a fallback. Preserve a failure, diagnose the
+  canonical path, and stop for Steve if it cannot be repaired within the
+  same authority; only a clearly transient failure gets one identical retry.
 - Promote often: a `dev` far ahead of `staging` makes promotion scary
   instead of routine. Claude flags when the gap exceeds ~10 units.
 

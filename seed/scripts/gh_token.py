@@ -39,7 +39,13 @@ Configuration (no value is ever hardcoded):
     SOFA_APP_KEY    path to its PEM private key (default ~/.config/sofa-claude/app.pem)
     SOFA_AUDIT_LOG  elevation record (default ~/.config/sofa-claude/elevations.log)
 
+Supported child clients are GitHub CLI for API operations and Git for HTTPS
+repository transport. The helper refuses credential-management commands and
+does not retry or suggest another identity, client, transport, repository, or
+permission after failure.
+
 Usage:
+    gh_token.py --profile read --account ORG --repos a,b -- gh pr list
     gh_token.py --account ORG --repos a,b --perm contents=write -- gh pr list
     gh_token.py --account ORG --repos a --perm administration=write \
                 --reason "bootstrap: apply protect-main ruleset" -- gh api ...
@@ -53,6 +59,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -79,6 +86,25 @@ ELEVATED = ORG_LEVEL + ("administration", "secrets", "actions", "workflows")
 # as harmless on the one permission that can remove a ruleset.
 READ_LEVEL = "read"
 
+# A stable rule may allow this profile before the caller names an account or
+# repository: every capability it can mint is read-only, while each invocation
+# still names the repositories it actually touches. Keep the profile broad
+# enough for ordinary source, issue/PR, and CI research; an endpoint needing a
+# new read permission is a broker change to review, not a reason to improvise
+# another credential path.
+READ_PROFILE_PERMISSIONS = {
+    "metadata": "read",
+    "contents": "read",
+    "issues": "read",
+    "pull_requests": "read",
+    "checks": "read",
+    "statuses": "read",
+    "actions": "read",
+}
+
+BLOCKED_GH_OPERATIONS = {"auth", "alias", "config", "extension"}
+BLOCKED_GIT_OPERATIONS = {"credential", "config"}
+
 
 def recorded_permissions(permissions):
     """Names worth an audit record -- any level."""
@@ -93,6 +119,44 @@ def elevated_permissions(permissions):
 
 class TokenError(RuntimeError):
     """Raised with an actionable message; never carries a credential."""
+
+
+def validate_child_command(command):
+    """Admit only the two canonical GitHub clients without token escape hatches.
+
+    `gh` owns API operations and `git` owns HTTPS repository transport. Client
+    configuration and credential inspection happen outside this broker because
+    both can persist or print the installation token. Permission and repository
+    scope remain enforced by the token even as new ordinary GitHub operations
+    become available through either client.
+    """
+    if not command or command[0] not in ("gh", "git"):
+        raise TokenError(
+            "Only the supported `gh` API client or `git` HTTPS transport may "
+            "run under a GitHub App token. Diagnose the requested operation; "
+            "do not substitute another client or credential.")
+
+    client = command[0]
+    arguments = command[1:]
+    blocked = BLOCKED_GH_OPERATIONS if client == "gh" else BLOCKED_GIT_OPERATIONS
+    if arguments and arguments[0] in blocked:
+        raise TokenError(
+            f"`{client}` credential or client reconfiguration must run outside "
+            "the token broker. The broker will not expose or persist an "
+            "installation token.")
+    if client == "git" and any(
+            argument == "-c" or argument.startswith("--config-env")
+            or argument.startswith("--exec-path") for argument in arguments):
+        raise TokenError(
+            "Git configuration overrides must run outside the token broker. "
+            "The broker will not execute aliases or alternate helpers with an "
+            "installation token in scope.")
+    if any(argument.startswith(("ssh://", "git://", "git@github.com"))
+           for argument in arguments):
+        raise TokenError(
+            "Only HTTPS Git transport is supported under the GitHub App token; "
+            "do not retry with SSH or the unauthenticated Git protocol.")
+    return command
 
 
 def _b64(raw):
@@ -352,7 +416,10 @@ def main(argv=None):
                         help="org or user login the App is installed on")
     parser.add_argument("--repos", required=True,
                         help="comma-separated repository names (not full names)")
-    parser.add_argument("--perm", required=True, action="append", type=_permission,
+    access = parser.add_mutually_exclusive_group(required=True)
+    access.add_argument("--profile", choices=("read",),
+                        help="fixed safe permission profile")
+    access.add_argument("--perm", action="append", type=_permission,
                         metavar="NAME=LEVEL", help="repeatable; e.g. contents=write")
     parser.add_argument("--reason", help="required for elevated permissions")
     parser.add_argument("command", nargs=argparse.REMAINDER,
@@ -366,14 +433,46 @@ def main(argv=None):
         parser.error("give a command after -- ; this tool runs a command "
                      "under a token, it does not hand the token out")
     try:
+        validate_child_command(command)
+        permissions = (dict(READ_PROFILE_PERMISSIONS) if args.profile == "read"
+                       else dict(args.perm))
         token, _ = mint(args.account,
                         [r.strip() for r in args.repos.split(",") if r.strip()],
-                        dict(args.perm), args.reason)
+                        permissions, args.reason)
     except TokenError as err:
         print(f"CREDENTIAL FAILURE -- nothing was minted.\n{err}", file=sys.stderr)
         return 2
-    env = dict(os.environ, GH_TOKEN=token, GITHUB_TOKEN=token)
-    return subprocess.run(command, env=env).returncode
+    env = dict(os.environ)
+    for name in ("GH_ENTERPRISE_TOKEN", "GITHUB_ENTERPRISE_TOKEN"):
+        env.pop(name, None)
+    env.update(
+        GH_TOKEN=token,
+        GITHUB_TOKEN=token,
+        GH_HOST="github.com",
+        GH_PROMPT_DISABLED="1",
+        GH_NO_UPDATE_NOTIFIER="1",
+        GIT_TERMINAL_PROMPT="0",
+        GCM_INTERACTIVE="never",
+        GIT_SSH_COMMAND="false",
+        GIT_ALLOW_PROTOCOL="https",
+        GIT_CONFIG_COUNT="2",
+        GIT_CONFIG_KEY_0="credential.helper",
+        GIT_CONFIG_VALUE_0="",
+        GIT_CONFIG_KEY_1="credential.helper",
+        GIT_CONFIG_VALUE_1="!/Users/sofa-claude/bin/gh auth git-credential",
+    )
+    # Isolate gh from the macOS account's stored auth, aliases, and extensions.
+    # GH_TOKEN remains the only identity visible to both gh and its Git helper.
+    with tempfile.TemporaryDirectory(prefix="sofa-gh-config-") as config_dir:
+        env["GH_CONFIG_DIR"] = config_dir
+        result = subprocess.run(command, env=env)
+    if result.returncode:
+        print(
+            "CANONICAL GITHUB OPERATION FAILED -- preserve the error and find "
+            "its root cause. Do not retry with another identity, credential, "
+            "client, transport, repository scope, permission set, or protection "
+            "bypass.", file=sys.stderr)
+    return result.returncode
 
 
 if __name__ == "__main__":
